@@ -5,25 +5,43 @@ import numpy as np
 
 def _fmt(val, decimals: int = 1) -> str:
     if pd.isna(val) or val is None:
-        return ""
-    return f"{val:,.{decimals}f}"
+        return "—"
+    try:
+        return f"{float(val):,.{decimals}f}"
+    except (ValueError, TypeError):
+        return str(val)
 
 
 def make_summary_table(
     df: pd.DataFrame,
     columns: list[str],
+    col_labels: dict[str, str] = None,
     date_col: str = "Data",
     decimals: int = 1,
     n_rows: int = 5,
 ) -> str:
-    """Gera tabela HTML das ultimas n_rows linhas."""
+    """Gera tabela HTML das ultimas n_rows linhas.
+
+    col_labels: dict mapping internal column names to display names.
+    """
+    if col_labels is None:
+        col_labels = {}
+
     tail = df.tail(n_rows).copy()
 
+    # Build header
+    all_cols = [date_col] + columns
+    header_cells = []
+    for c in all_cols:
+        label = col_labels.get(c, c)
+        header_cells.append(f"<th>{label}</th>")
+
+    # Build rows
     rows_html = []
     for _, row in tail.iterrows():
         cells = []
-        for c in [date_col] + columns:
-            val = row[c]
+        for c in all_cols:
+            val = row.get(c)
             if c == date_col:
                 if isinstance(val, pd.Timestamp):
                     cells.append(f"<td>{val.strftime('%d/%m/%Y')}</td>")
@@ -33,10 +51,9 @@ def make_summary_table(
                 cells.append(f"<td class='num'>{_fmt(val, decimals)}</td>")
         rows_html.append("<tr>" + "".join(cells) + "</tr>")
 
-    header_cells = "".join(f"<th>{c}</th>" for c in [date_col] + columns)
     return f"""
     <table class="data-table">
-        <thead><tr>{header_cells}</tr></thead>
+        <thead><tr>{"".join(header_cells)}</tr></thead>
         <tbody>{"".join(rows_html)}</tbody>
     </table>
     """

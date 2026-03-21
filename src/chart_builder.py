@@ -8,6 +8,13 @@ def _to_html(fig: go.Figure) -> str:
     return fig.to_html(full_html=False, include_plotlyjs=False)
 
 
+def _apply_rangebreaks(fig: go.Figure) -> None:
+    """Remove weekends from x-axis to avoid gaps in daily data."""
+    fig.update_xaxes(
+        rangebreaks=[dict(bounds=["sat", "mon"])],
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Charts padrao (Pensao, Offshore, Corporate, Bancos)
 # ──────────────────────────────────────────────────────────────────────
@@ -30,6 +37,7 @@ def make_line_chart(
         showlegend=False,
     )
     fig.add_hline(y=0, line_dash="solid", line_color="black", line_width=0.5)
+    _apply_rangebreaks(fig)
     return _to_html(fig)
 
 
@@ -53,6 +61,7 @@ def make_bar_chart(
         showlegend=False,
     )
     fig.add_hline(y=0, line_dash="solid", line_color="black", line_width=0.5)
+    _apply_rangebreaks(fig)
     return _to_html(fig)
 
 
@@ -83,8 +92,8 @@ def make_dual_axis_chart(
         secondary_y=True,
     )
     fig.update_layout(
-        title=title, template="plotly_white", height=450,
-        margin=dict(l=50, r=50, t=50, b=40),
+        title=title, template="plotly_white", height=500,
+        margin=dict(l=60, r=60, t=50, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     fig.update_yaxes(title_text=y1_name, secondary_y=False)
@@ -92,6 +101,7 @@ def make_dual_axis_chart(
         fig.update_yaxes(title_text=y2_name, autorange="reversed", secondary_y=True)
     else:
         fig.update_yaxes(title_text=y2_name, secondary_y=True)
+    _apply_rangebreaks(fig)
     return _to_html(fig)
 
 
@@ -118,12 +128,13 @@ def make_dual_series_chart(
         secondary_y=True,
     )
     fig.update_layout(
-        title=title, template="plotly_white", height=450,
-        margin=dict(l=50, r=50, t=50, b=40),
+        title=title, template="plotly_white", height=500,
+        margin=dict(l=60, r=60, t=50, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     fig.update_yaxes(title_text=y1_name, secondary_y=False)
     fig.update_yaxes(title_text=y2_name, secondary_y=True)
+    _apply_rangebreaks(fig)
     return _to_html(fig)
 
 
@@ -143,7 +154,6 @@ def make_swap_line_chart(
     col_loc = f"total_{tenor}.localexbanks"
     col_total = f"total_{tenor}"
 
-    # Check columns exist
     for c in [col_off, col_loc, col_total]:
         if c not in df.columns:
             return f"<p>Coluna {c} não encontrada</p>"
@@ -151,36 +161,43 @@ def make_swap_line_chart(
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df["Data"], y=df[col_off], name="Offshore",
-        line=dict(width=2),
+        line=dict(width=2, color="#1f77b4"),
     ))
     fig.add_trace(go.Scatter(
         x=df["Data"], y=df[col_loc], name="Local Ex Banks",
-        line=dict(width=2),
+        line=dict(width=2, color="#ff7f0e"),
     ))
     fig.add_trace(go.Scatter(
         x=df["Data"], y=-df[col_total], name="Local Banks",
-        line=dict(width=2),
+        line=dict(width=2, color="#2ca02c"),
     ))
     fig.add_hline(y=0, line_color="black", line_width=0.5)
 
-    y_min = min(df[col_off].min(), df[col_loc].min(), (-df[col_total]).min())
-    y_max = max(df[col_off].max(), df[col_loc].max(), (-df[col_total]).max())
+    y_vals = pd.concat([df[col_off], df[col_loc], -df[col_total]]).dropna()
+    y_min = y_vals.min() if len(y_vals) > 0 else 0
+    y_max = y_vals.max() if len(y_vals) > 0 else 0
 
     fig.add_annotation(
-        x=df["Data"].iloc[0], y=y_min * 1.1,
-        text="Tomado", showarrow=False, font=dict(color="red", size=11),
+        x=df["Data"].iloc[0], y=y_min * 1.1 if y_min < 0 else y_min - abs(y_max) * 0.1,
+        text="Tomado", showarrow=False, font=dict(color="red", size=10),
     )
     fig.add_annotation(
-        x=df["Data"].iloc[0], y=y_max * 1.1,
-        text="Aplicado", showarrow=False, font=dict(color="blue", size=11),
+        x=df["Data"].iloc[0], y=y_max * 1.1 if y_max > 0 else y_max + abs(y_min) * 0.1,
+        text="Aplicado", showarrow=False, font=dict(color="blue", size=10),
     )
 
     fig.update_layout(
-        title=title, template="plotly_white", height=400,
-        margin=dict(l=50, r=20, t=50, b=40),
+        title=dict(text=title, font=dict(size=12)),
+        template="plotly_white",
+        height=380,
+        margin=dict(l=50, r=15, t=40, b=35),
         yaxis_title="DV01",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5,
+            font=dict(size=9),
+        ),
     )
+    _apply_rangebreaks(fig)
     return _to_html(fig)
 
 
@@ -198,7 +215,7 @@ def make_swap_delta_bars(
         marker_color="darkblue",
     ))
     fig.update_layout(
-        title=title, template="plotly_white", height=300,
+        title=title, template="plotly_white", height=280,
         margin=dict(l=100, r=20, t=50, b=40),
         xaxis_title="DV01", yaxis_title="",
         showlegend=False,
@@ -234,4 +251,5 @@ def make_colombia_line_chart(
         yaxis_title="USD million",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
+    _apply_rangebreaks(fig)
     return _to_html(fig)

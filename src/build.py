@@ -38,21 +38,33 @@ def build_fx_section(dados):
     """Gera charts e tables para as 4 secoes FX padrao + dual-axis."""
     ctx = {}
 
+    fx_labels = {
+        "delta_1d": "Delta 1D",
+        "delta_7d": "Delta 7D",
+        "delta_28d": "Delta 28D",
+        "pct_usdclp": "% USDCLP",
+    }
+
     # ── FUNDOS DE PENSÃO ──
     col = "Fondos de pensiones"
     df_pension = compute_deltas(dados, col, [1, 7, 28])
     ctx["pension_line"] = make_line_chart(dados, "Data", col, "Fondos de Pensiones: Net Short (USD million)")
-    ctx["pension_table"] = make_summary_table(df_pension, [col, "delta_1d", "delta_7d", "delta_28d"])
+    ctx["pension_table"] = make_summary_table(
+        df_pension, [col, "delta_1d", "delta_7d", "delta_28d"],
+        col_labels={col: "Nivel", **fx_labels},
+    )
     ctx["pension_delta7"] = make_bar_chart(df_pension, "Data", "delta_7d", "DELTA 7 DIAS: Fondos de Pensiones (USD million)")
     ctx["pension_delta28"] = make_bar_chart(df_pension, "Data", "delta_28d", "DELTA 28 DIAS: Fondos de Pensiones (USD million)")
 
     # ── OFFSHORE ──
     col = "No residentes"
     df_off = compute_deltas(dados, col, [1, 7, 28])
-    # Add % USDCLP change
     df_off["pct_usdclp"] = 100 * (np.log(df_off["USDCLP"]) - np.log(df_off["USDCLP"].shift(1)))
     ctx["offshore_line"] = make_line_chart(dados, "Data", col, "No Residentes (Offshore): Net Short (USD million)")
-    ctx["offshore_table"] = make_summary_table(df_off, [col, "delta_1d", "pct_usdclp"], decimals=1)
+    ctx["offshore_table"] = make_summary_table(
+        df_off, [col, "delta_1d", "pct_usdclp"],
+        col_labels={col: "Nivel", **fx_labels}, decimals=1,
+    )
     ctx["offshore_delta7"] = make_bar_chart(df_off, "Data", "delta_7d", "DELTA 7 DIAS: No Residentes (USD million)")
     ctx["offshore_delta28"] = make_bar_chart(df_off, "Data", "delta_28d", "DELTA 28 DIAS: No Residentes (USD million)")
 
@@ -60,7 +72,10 @@ def build_fx_section(dados):
     col = "Empresas sector real"
     df_corp = compute_deltas(dados, col, [1, 7, 28])
     ctx["corporate_line"] = make_line_chart(dados, "Data", col, "Empresas Sector Real: Net Short (USD million)")
-    ctx["corporate_table"] = make_summary_table(df_corp, [col, "delta_1d", "delta_7d", "delta_28d"])
+    ctx["corporate_table"] = make_summary_table(
+        df_corp, [col, "delta_1d", "delta_7d", "delta_28d"],
+        col_labels={col: "Nivel", **fx_labels},
+    )
     ctx["corporate_delta7"] = make_bar_chart(df_corp, "Data", "delta_7d", "DELTA 7 DIAS: Empresas Sector Real (USD million)")
     ctx["corporate_delta28"] = make_bar_chart(df_corp, "Data", "delta_28d", "DELTA 28 DIAS: Empresas Sector Real (USD million)")
 
@@ -68,7 +83,10 @@ def build_fx_section(dados):
     col = "PosicaoBancos"
     df_banks = compute_deltas(dados, col, [1, 7, 28])
     ctx["banks_line"] = make_line_chart(dados, "Data", col, "Posição dos Bancos: Net Spot (USD million)")
-    ctx["banks_table"] = make_summary_table(df_banks, [col, "delta_1d", "delta_7d", "delta_28d"])
+    ctx["banks_table"] = make_summary_table(
+        df_banks, [col, "delta_1d", "delta_7d", "delta_28d"],
+        col_labels={col: "Nivel", **fx_labels},
+    )
     ctx["banks_delta7"] = make_bar_chart(df_banks, "Data", "delta_7d", "DELTA 7 DIAS: Posição dos Bancos (USD million)")
     ctx["banks_delta28"] = make_bar_chart(df_banks, "Data", "delta_28d", "DELTA 28 DIAS: Posição dos Bancos (USD million)")
 

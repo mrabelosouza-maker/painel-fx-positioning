@@ -147,7 +147,8 @@ def build_swap_data() -> dict:
     delta_lags = [1, 7, 30, 45, 90]
 
     for tenor_key in ["ate2y", "5y", "10y"]:
-        df_t = dv01[tenor_key].copy()
+        df_t = dv01[tenor_key].copy().dropna()
+        df_t = df_t.reset_index(drop=True)
         table_data = {}
 
         for participant, suffix in [
@@ -155,20 +156,31 @@ def build_swap_data() -> dict:
             ("Local Ex Banks", ".localexbanks"),
         ]:
             col = f"total_{tenor_key}{suffix}"
+            if col not in df_t.columns or df_t[col].dropna().empty:
+                table_data[participant] = {f"{lag}D Change": np.nan for lag in delta_lags}
+                continue
+            series = df_t[col].dropna()
             deltas = {}
             for lag in delta_lags:
-                val = df_t[col].iloc[-1] - df_t[col].iloc[-(lag + 1)] if len(df_t) > lag else np.nan
-                deltas[f"{lag}D Change"] = val
+                if len(series) > lag:
+                    deltas[f"{lag}D Change"] = float(series.iloc[-1] - series.iloc[-(lag + 1)])
+                else:
+                    deltas[f"{lag}D Change"] = np.nan
             table_data[participant] = deltas
 
         # Local Banks = -total
         col_total = f"total_{tenor_key}"
-        neg_total = -df_t[col_total]
-        deltas_banks = {}
-        for lag in delta_lags:
-            val = neg_total.iloc[-1] - neg_total.iloc[-(lag + 1)] if len(df_t) > lag else np.nan
-            deltas_banks[f"{lag}D Change"] = val
-        table_data["Local Banks"] = deltas_banks
+        if col_total in df_t.columns and not df_t[col_total].dropna().empty:
+            neg_series = (-df_t[col_total]).dropna()
+            deltas_banks = {}
+            for lag in delta_lags:
+                if len(neg_series) > lag:
+                    deltas_banks[f"{lag}D Change"] = float(neg_series.iloc[-1] - neg_series.iloc[-(lag + 1)])
+                else:
+                    deltas_banks[f"{lag}D Change"] = np.nan
+            table_data["Local Banks"] = deltas_banks
+        else:
+            table_data["Local Banks"] = {f"{lag}D Change": np.nan for lag in delta_lags}
 
         delta_tables[tenor_key] = table_data
 
