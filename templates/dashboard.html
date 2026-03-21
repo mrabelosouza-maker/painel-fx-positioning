@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel FX Positioning</title>
+    <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5; color: #333;
+        }
+        .header {
+            background: #2c3e50; color: white; padding: 16px 24px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .header h1 { font-size: 1.3rem; font-weight: 600; }
+        .header .subtitle { font-size: 0.85rem; opacity: 0.8; }
+
+        /* Tabs */
+        .tab-bar {
+            background: #34495e; display: flex; flex-wrap: wrap;
+            padding: 0 16px; gap: 2px;
+        }
+        .tab-btn {
+            background: transparent; border: none; color: #bdc3c7;
+            padding: 10px 16px; cursor: pointer; font-size: 0.8rem;
+            font-weight: 500; border-bottom: 3px solid transparent;
+            transition: all 0.2s; white-space: nowrap;
+        }
+        .tab-btn:hover { color: white; background: rgba(255,255,255,0.05); }
+        .tab-btn.active {
+            color: white; border-bottom-color: #3498db;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .tab-content { display: none; padding: 20px; }
+        .tab-content.active { display: block; }
+
+        /* Layout */
+        .row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .panel { flex: 1; min-width: 300px; background: white; border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .panel-wide { flex: 2; }
+        .panel-narrow { flex: 1; }
+
+        /* Tables */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .data-table th {
+            background: #2c3e50; color: white; padding: 8px 10px;
+            text-align: left; font-weight: 500;
+        }
+        .data-table td { padding: 6px 10px; border-bottom: 1px solid #eee; }
+        .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        .data-table tr:hover { background: #f8f9fa; }
+        .data-table .row-label { font-weight: 500; }
+        .swap-table { margin-top: 4px; }
+        .table-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; }
+        .table-subtitle { font-size: 0.78rem; color: #777; margin-bottom: 8px; }
+
+        /* Swap grid */
+        .swap-tables-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .swap-table-panel { flex: 1; min-width: 280px; background: white; border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .swap-charts-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+        .swap-chart-panel { flex: 1; min-width: 350px; background: white; border-radius: 6px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+        .footer {
+            text-align: center; padding: 16px; font-size: 0.75rem; color: #999;
+        }
+
+        /* Plotly responsive */
+        .js-plotly-plot { width: 100% !important; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>Painel FX Positioning</h1>
+            <div class="subtitle">JGP Emerging Markets</div>
+        </div>
+        <div class="subtitle">Atualizado: {{ build_timestamp }}</div>
+    </div>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="showTab('pension')">FUNDOS DE PENSÃO</button>
+        <button class="tab-btn" onclick="showTab('offshore')">OFFSHORE</button>
+        <button class="tab-btn" onclick="showTab('corporate')">CORPORATE</button>
+        <button class="tab-btn" onclick="showTab('banks')">POSIÇÃO DOS BANCOS</button>
+        <button class="tab-btn" onclick="showTab('total')">TOTAL VS USDCLP</button>
+        <button class="tab-btn" onclick="showTab('pensoff')">FUNDOS + OFFSHORE</button>
+        <button class="tab-btn" onclick="showTab('swap')">SWAP CAMARA</button>
+        <button class="tab-btn" onclick="showTab('colombia')">SALDOS FWD: USDCOP</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- FUNDOS DE PENSÃO -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-pension" class="tab-content active">
+        <div class="row">
+            <div class="panel panel-wide">{{ pension_line | safe }}</div>
+            <div class="panel panel-narrow">{{ pension_table | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ pension_delta7 | safe }}</div>
+            <div class="panel">{{ pension_delta28 | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- OFFSHORE -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-offshore" class="tab-content">
+        <div class="row">
+            <div class="panel panel-wide">{{ offshore_line | safe }}</div>
+            <div class="panel panel-narrow">{{ offshore_table | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ offshore_delta7 | safe }}</div>
+            <div class="panel">{{ offshore_delta28 | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- CORPORATE -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-corporate" class="tab-content">
+        <div class="row">
+            <div class="panel panel-wide">{{ corporate_line | safe }}</div>
+            <div class="panel panel-narrow">{{ corporate_table | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ corporate_delta7 | safe }}</div>
+            <div class="panel">{{ corporate_delta28 | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- POSIÇÃO DOS BANCOS -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-banks" class="tab-content">
+        <div class="row">
+            <div class="panel panel-wide">{{ banks_line | safe }}</div>
+            <div class="panel panel-narrow">{{ banks_table | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ banks_delta7 | safe }}</div>
+            <div class="panel">{{ banks_delta28 | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TOTAL VS USDCLP -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-total" class="tab-content">
+        <div class="row">
+            <div class="panel">{{ total_vs_usdclp | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- FUNDOS DE PENSÃO E OFFSHORE -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-pensoff" class="tab-content">
+        <div class="row">
+            <div class="panel">{{ pension_offshore_dual | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SWAP CAMARA -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-swap" class="tab-content">
+        <!-- Delta tables -->
+        <div class="swap-tables-row">
+            <div class="swap-table-panel">{{ swap_table_ate2y | safe }}</div>
+            <div class="swap-table-panel">{{ swap_table_5y | safe }}</div>
+            <div class="swap-table-panel">{{ swap_table_10y | safe }}</div>
+        </div>
+        <!-- Main tenor charts: ate2y, 5y, 10y -->
+        <div class="swap-charts-row">
+            <div class="swap-chart-panel">{{ swap_chart_ate2y | safe }}</div>
+            <div class="swap-chart-panel">{{ swap_chart_5y | safe }}</div>
+            <div class="swap-chart-panel">{{ swap_chart_10y | safe }}</div>
+        </div>
+        <!-- Individual tenors: 3m, 6m, 9m -->
+        <div class="swap-charts-row">
+            <div class="swap-chart-panel">{{ swap_chart_3m | safe }}</div>
+            <div class="swap-chart-panel">{{ swap_chart_6m | safe }}</div>
+            <div class="swap-chart-panel">{{ swap_chart_9m | safe }}</div>
+        </div>
+        <!-- Individual tenors: 12m, 18m, 2y -->
+        <div class="swap-charts-row">
+            <div class="swap-chart-panel">{{ swap_chart_12m | safe }}</div>
+            <div class="swap-chart-panel">{{ swap_chart_18m | safe }}</div>
+            <div class="swap-chart-panel">{{ swap_chart_2y | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- SALDOS FWD: USDCOP -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-colombia" class="tab-content">
+        <div class="row">
+            <div class="panel panel-wide">{{ colombia_line | safe }}</div>
+            <div class="panel panel-narrow">{{ colombia_table | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ colombia_delta7 | safe }}</div>
+            <div class="panel">{{ colombia_delta28 | safe }}</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Painel FX Positioning &mdash; JGP Emerging Markets &mdash; Gerado em {{ build_timestamp }}
+    </div>
+
+    <script>
+        function showTab(name) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            event.currentTarget.classList.add('active');
+            // Trigger Plotly resize for newly visible charts
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+            }, 50);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+name: Build Dashboard
+
+on:
+  schedule:
+    - cron: '0 12 * * 1-5'  # Weekdays at 12:00 UTC
+  workflow_dispatch:          # Manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build dashboard
+        run: python src/build.py
+        env:
+          BCENTRAL_USER: ${{ secrets.BCENTRAL_USER }}
+          BCENTRAL_PASS: ${{ secrets.BCENTRAL_PASS }}
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git diff --staged --quiet || git commit -m "Update dashboard $(date -u +%Y-%m-%d)"
+          git push
