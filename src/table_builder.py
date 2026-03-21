@@ -27,7 +27,9 @@ def make_summary_table(
     if col_labels is None:
         col_labels = {}
 
-    tail = df.tail(n_rows).copy()
+    # Remove rows where the main data columns are all NaN
+    clean = df.dropna(subset=columns, how="all") if columns else df
+    tail = clean.tail(n_rows).copy()
 
     # Build header
     all_cols = [date_col] + columns
