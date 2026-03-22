@@ -48,14 +48,45 @@ def build_fx_dados() -> pd.DataFrame:
 
 
 def compute_deltas(
-    df: pd.DataFrame, col: str, lags: list[int] = None
+    df: pd.DataFrame, col: str, lags: list[int] = None,
+    date_col: str = "Data",
 ) -> pd.DataFrame:
-    """Adiciona colunas de delta (col - lag) ao DataFrame."""
+    """Adiciona colunas de delta baseadas em dias corridos.
+
+    Para cada lag N, busca o valor do dia util mais proximo a (data - N dias).
+    Assim, delta_1d na segunda-feira compara com sexta-feira,
+    delta_7d compara com 7 dias corridos atras (dia util mais proximo), etc.
+    """
     if lags is None:
         lags = [1, 7, 28]
     result = df.copy()
+    result = result.sort_values(date_col).reset_index(drop=True)
+
+    # Indexar por data para lookup rapido
+    date_series = result[date_col]
+    val_series = result[col]
+
+    # Criar mapa data -> valor (usando o ultimo valor disponivel para cada data)
+    date_to_val = dict(zip(date_series, val_series))
+    sorted_dates = date_series.sort_values().values
+
     for lag in lags:
-        result[f"delta_{lag}d"] = result[col] - result[col].shift(lag)
+        deltas = []
+        for i, row_date in enumerate(date_series):
+            target_date = row_date - pd.Timedelta(days=lag)
+            # Buscar o dia util mais proximo <= target_date
+            candidates = sorted_dates[sorted_dates <= target_date]
+            if len(candidates) > 0:
+                closest_date = candidates[-1]
+                prev_val = date_to_val.get(pd.Timestamp(closest_date))
+                if prev_val is not None and not pd.isna(prev_val):
+                    deltas.append(val_series.iloc[i] - prev_val)
+                else:
+                    deltas.append(np.nan)
+            else:
+                deltas.append(np.nan)
+        result[f"delta_{lag}d"] = deltas
+
     return result
 
 
@@ -142,40 +173,58 @@ def build_swap_data() -> dict:
 
     dv01["ate2y"] = ate2y_df
 
-    # Delta tables for ate2y, 5y, 10y
+    # Delta tables for ate2y, 5y, 10y (dias corridos)
     delta_tables = {}
     delta_lags = [1, 7, 30, 45, 90]
 
     for tenor_key in ["ate2y", "5y", "10y"]:
-        df_t = dv01[tenor_key].copy().dropna()
-        df_t = df_t.reset_index(drop=True)
+        df_t = dv01[tenor_key].copy().dropna(subset=["Data"])
+        df_t = df_t.sort_values("Data").reset_index(drop=True)
         table_data = {}
+
+        last_date = df_t["Data"].iloc[-1] if len(df_t) > 0 else None
 
         for participant, suffix in [
             ("Offshore", ".offshore"),
             ("Local Ex Banks", ".localexbanks"),
         ]:
             col = f"total_{tenor_key}{suffix}"
-            if col not in df_t.columns or df_t[col].dropna().empty:
+            if col not in df_t.columns or df_t[col].dropna().empty or last_date is None:
                 table_data[participant] = {f"{lag}D Change": np.nan for lag in delta_lags}
                 continue
-            series = df_t[col].dropna()
+            last_val = df_t[col].iloc[-1]
+            date_to_val = dict(zip(df_t["Data"], df_t[col]))
+            sorted_dates = df_t["Data"].sort_values().values
             deltas = {}
             for lag in delta_lags:
-                if len(series) > lag:
-                    deltas[f"{lag}D Change"] = float(series.iloc[-1] - series.iloc[-(lag + 1)])
+                target = last_date - pd.Timedelta(days=lag)
+                candidates = sorted_dates[sorted_dates <= target]
+                if len(candidates) > 0:
+                    prev_val = date_to_val.get(pd.Timestamp(candidates[-1]))
+                    if prev_val is not None and not pd.isna(prev_val):
+                        deltas[f"{lag}D Change"] = float(last_val - prev_val)
+                    else:
+                        deltas[f"{lag}D Change"] = np.nan
                 else:
                     deltas[f"{lag}D Change"] = np.nan
             table_data[participant] = deltas
 
         # Local Banks = -total
         col_total = f"total_{tenor_key}"
-        if col_total in df_t.columns and not df_t[col_total].dropna().empty:
-            neg_series = (-df_t[col_total]).dropna()
+        if col_total in df_t.columns and not df_t[col_total].dropna().empty and last_date is not None:
+            last_val = -df_t[col_total].iloc[-1]
+            date_to_val = dict(zip(df_t["Data"], -df_t[col_total]))
+            sorted_dates = df_t["Data"].sort_values().values
             deltas_banks = {}
             for lag in delta_lags:
-                if len(neg_series) > lag:
-                    deltas_banks[f"{lag}D Change"] = float(neg_series.iloc[-1] - neg_series.iloc[-(lag + 1)])
+                target = last_date - pd.Timedelta(days=lag)
+                candidates = sorted_dates[sorted_dates <= target]
+                if len(candidates) > 0:
+                    prev_val = date_to_val.get(pd.Timestamp(candidates[-1]))
+                    if prev_val is not None and not pd.isna(prev_val):
+                        deltas_banks[f"{lag}D Change"] = float(last_val - prev_val)
+                    else:
+                        deltas_banks[f"{lag}D Change"] = np.nan
                 else:
                     deltas_banks[f"{lag}D Change"] = np.nan
             table_data["Local Banks"] = deltas_banks
@@ -221,13 +270,35 @@ def build_colombia_data() -> dict:
 
     series = series.dropna(subset=["Fecha"]).sort_values("Fecha").reset_index(drop=True)
 
-    # Table: last 5 rows with delta and % USDCOP
+    # Table: last 5 rows with delta (dias corridos) and % USDCOP
     table_df = series[["Fecha", "Extranjero", "USDCOP"]].copy()
+    table_df = table_df.sort_values("Fecha").reset_index(drop=True)
     table_df["USDCOP"] = pd.to_numeric(table_df["USDCOP"], errors="coerce")
-    table_df["Delta"] = table_df["Extranjero"] - table_df["Extranjero"].shift(1)
-    table_df["% USDCOP"] = 100 * (
-        np.log(table_df["USDCOP"]) - np.log(table_df["USDCOP"].shift(1))
-    )
+
+    # Delta 1D em dias corridos: buscar dia util anterior
+    sorted_dates = table_df["Fecha"].values
+    date_to_ext = dict(zip(table_df["Fecha"], table_df["Extranjero"]))
+    date_to_cop = dict(zip(table_df["Fecha"], table_df["USDCOP"]))
+    deltas = []
+    pct_cop = []
+    for _, row in table_df.iterrows():
+        target = row["Fecha"] - pd.Timedelta(days=1)
+        candidates = sorted_dates[sorted_dates <= target]
+        if len(candidates) > 0:
+            prev_date = pd.Timestamp(candidates[-1])
+            prev_ext = date_to_ext.get(prev_date)
+            prev_cop = date_to_cop.get(prev_date)
+            deltas.append(row["Extranjero"] - prev_ext if prev_ext is not None else np.nan)
+            if prev_cop is not None and prev_cop > 0 and row["USDCOP"] > 0:
+                pct_cop.append(100 * (np.log(row["USDCOP"]) - np.log(prev_cop)))
+            else:
+                pct_cop.append(np.nan)
+        else:
+            deltas.append(np.nan)
+            pct_cop.append(np.nan)
+    table_df["Delta"] = deltas
+    table_df["% USDCOP"] = pct_cop
+
     table_df = table_df.rename(columns={"Extranjero": "Nivel"})
     table_data = table_df[["Fecha", "Nivel", "Delta", "% USDCOP"]].tail(5)
 

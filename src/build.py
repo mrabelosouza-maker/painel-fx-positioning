@@ -157,10 +157,8 @@ def build_colombia_section(col_data):
         table_data, ["Nivel", "Delta", "% USDCOP"], date_col="Fecha", decimals=1
     )
 
-    # Deltas
-    series_deltas = series.copy()
-    series_deltas["delta_7d"] = series_deltas["Extranjero"] - series_deltas["Extranjero"].shift(7)
-    series_deltas["delta_28d"] = series_deltas["Extranjero"] - series_deltas["Extranjero"].shift(28)
+    # Deltas (dias corridos)
+    series_deltas = compute_deltas(series, "Extranjero", [7, 28], date_col="Fecha")
 
     ctx["colombia_delta7"] = make_bar_chart(
         series_deltas, "Fecha", "delta_7d",
