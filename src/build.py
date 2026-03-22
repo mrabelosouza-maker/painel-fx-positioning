@@ -3,7 +3,7 @@ import os
 import sys
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -250,7 +250,8 @@ def main():
     # ── 4. Build all charts and tables ──
     logger.info("Gerando charts e tables...")
     context = {}
-    context["build_timestamp"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    brt = timezone(timedelta(hours=-3))
+    context["build_timestamp"] = datetime.now(brt).strftime("%Y-%m-%d %H:%M BRT")
 
     context.update(build_fx_section(dados))
     context.update(build_offshore_adj_section(dados))
