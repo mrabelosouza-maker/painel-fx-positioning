@@ -144,19 +144,26 @@ def build_offshore_adj_section(dados):
     ctx = {}
     adj_df = build_offshore_adjusted(dados)
 
+    # Inverter sinal: positivo = long USD, negativo = short USD
+    adj_df["Offshore_Adj"] = -adj_df["Offshore_Adj"]
+
     fx_labels = {
         "delta_1d": "Delta 1D",
         "delta_7d": "Delta 7D",
         "delta_28d": "Delta 28D",
     }
 
-    # Dual-axis: Offshore Ajustado vs USDCLP
+    # Dual-axis: Offshore Ajustado vs USDCLP (eixo direito NAO invertido)
     ctx["offadj_chart"] = make_dual_axis_chart(
         adj_df, "Data", "Offshore_Adj", "USDCLP",
         title="Offshore Ajustado (NDF + Spot Acum.) vs USDCLP",
         y1_name="Offshore Adj (USD mm)", y2_name="USDCLP",
         y1_color="dodgerblue", y2_color="red",
-        invert_y2=True,
+        invert_y2=False,
+        annotations=[
+            dict(text="Long USD", y_pos="top", color="green"),
+            dict(text="Short USD", y_pos="bottom", color="red"),
+        ],
     )
 
     # Tabela: ultimas 5 linhas com deltas

@@ -92,6 +92,7 @@ def make_dual_axis_chart(
     y1_color: str = "dodgerblue",
     y2_color: str = "red",
     invert_y2: bool = True,
+    annotations: list = None,
 ) -> str:
     plot_df = df.dropna(subset=[x, y1, y2]).copy()
     x_str = _date_strings(plot_df[x])
@@ -117,6 +118,22 @@ def make_dual_axis_chart(
         fig.update_yaxes(title_text=y2_name, autorange="reversed", secondary_y=True)
     else:
         fig.update_yaxes(title_text=y2_name, secondary_y=True)
+
+    # Anotacoes (ex: "Long USD" / "Short USD")
+    if annotations:
+        y1_vals = plot_df[y1].dropna()
+        y1_min = y1_vals.min() if len(y1_vals) > 0 else 0
+        y1_max = y1_vals.max() if len(y1_vals) > 0 else 0
+        for ann in annotations:
+            y_pos = y1_max * 0.95 if ann.get("y_pos") == "top" else y1_min * 0.95
+            fig.add_annotation(
+                x=x_str[0], y=y_pos,
+                text=ann["text"], showarrow=False,
+                font=dict(color=ann.get("color", "black"), size=11, weight="bold"),
+                xanchor="left",
+            )
+        fig.add_hline(y=0, line_color="black", line_width=0.5)
+
     _apply_category_xaxis(fig)
     return _to_html(fig)
 
