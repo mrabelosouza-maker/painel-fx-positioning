@@ -90,26 +90,47 @@ def fetch_bcentral_matrix(
 # ──────────────────────────────────────────────────────────────────────
 # USDCLP Closing (Yahoo Finance)
 # ──────────────────────────────────────────────────────────────────────
-def fetch_usdclp_closing(start: str = "2022-06-01") -> pd.DataFrame:
-    """Busca USDCLP fechamento via Yahoo Finance. Fallback para BCCh."""
+def fetch_yfinance_closing(ticker_str: str, col_name: str, start: str = "2022-06-01") -> pd.DataFrame:
+    """Busca preco de fechamento via Yahoo Finance.
+
+    Retorna DataFrame com colunas [Data, col_name].
+    """
     try:
         import yfinance as yf
-        ticker = yf.Ticker("USDCLP=X")
+        ticker = yf.Ticker(ticker_str)
         hist = ticker.history(start=start)
         if hist.empty:
-            raise ValueError("Yahoo Finance retornou vazio")
+            raise ValueError(f"Yahoo Finance retornou vazio para {ticker_str}")
         df = hist[["Close"]].reset_index()
-        df = df.rename(columns={"Date": "Data", "Close": "USDCLP"})
+        df = df.rename(columns={"Date": "Data", "Close": col_name})
         df["Data"] = pd.to_datetime(df["Data"]).dt.tz_localize(None)
-        logger.info("USDCLP closing via Yahoo Finance: %d linhas", len(df))
-        return df[["Data", "USDCLP"]]
+        logger.info("%s closing via Yahoo Finance: %d linhas", ticker_str, len(df))
+        return df[["Data", col_name]]
     except Exception as e:
-        logger.warning("Yahoo Finance falhou (%s), usando BCCh (media)...", e)
-        from config import CODIGO_CAMBIO
-        raw = fetch_bcentral_series(CODIGO_CAMBIO)
-        raw["Data"] = pd.to_datetime(raw["date_str"], dayfirst=True, errors="coerce")
-        raw = raw.rename(columns={"value": "USDCLP"})
-        return raw[["Data", "USDCLP"]].dropna()
+        logger.warning("Yahoo Finance %s falhou: %s", ticker_str, e)
+        return pd.DataFrame(columns=["Data", col_name])
+
+
+def fetch_usdclp_closing(start: str = "2022-06-01") -> pd.DataFrame:
+    """Busca USDCLP fechamento via Yahoo Finance. Fallback para BCCh."""
+    df = fetch_yfinance_closing("USDCLP=X", "USDCLP", start)
+    if not df.empty:
+        return df
+    logger.warning("Fallback para BCCh (media) para USDCLP...")
+    from config import CODIGO_CAMBIO
+    raw = fetch_bcentral_series(CODIGO_CAMBIO)
+    raw["Data"] = pd.to_datetime(raw["date_str"], dayfirst=True, errors="coerce")
+    raw = raw.rename(columns={"value": "USDCLP"})
+    return raw[["Data", "USDCLP"]].dropna()
+
+
+def fetch_usdcop_closing(start: str = "2016-01-01") -> pd.DataFrame:
+    """Busca USDCOP fechamento via Yahoo Finance. Fallback para datos.gov.co."""
+    df = fetch_yfinance_closing("USDCOP=X", "USDCOP", start)
+    if not df.empty:
+        return df
+    logger.warning("Fallback para datos.gov.co para USDCOP...")
+    return fetch_colombia_cop()
 
 
 # ──────────────────────────────────────────────────────────────────────

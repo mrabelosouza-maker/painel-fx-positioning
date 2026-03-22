@@ -22,6 +22,7 @@ from data_fetcher import (
     fetch_colombia_cop,
     fetch_colombia_forwards,
     fetch_usdclp_closing,
+    fetch_usdcop_closing,
 )
 
 
@@ -304,7 +305,7 @@ def build_colombia_data() -> dict:
         - 'series': DataFrame com Fecha, Extranjero, FPC, RestoyReal, USDCOP
         - 'table_data': DataFrame com ultimas 5 linhas formatadas
     """
-    cop_df = fetch_colombia_cop()
+    cop_df = fetch_usdcop_closing()
     fwd_df = fetch_colombia_forwards()
 
     if fwd_df.empty:
@@ -314,9 +315,12 @@ def build_colombia_data() -> dict:
     fwd_df["RestoyReal"] = fwd_df["Resto"] + fwd_df["Real"]
     series = fwd_df[["Fecha", "Extranjero", "FPC", "RestoyReal"]].copy()
 
-    # Merge with COP
+    # Merge with COP (Yahoo Finance closing)
     if not cop_df.empty:
-        series = series.merge(cop_df, on="Fecha", how="left")
+        # cop_df vem com coluna "Data" do yfinance ou "Fecha" do fallback
+        if "Data" in cop_df.columns and "Fecha" not in cop_df.columns:
+            cop_df = cop_df.rename(columns={"Data": "Fecha"})
+        series = series.merge(cop_df[["Fecha", "USDCOP"]], on="Fecha", how="left")
     else:
         series["USDCOP"] = np.nan
 
