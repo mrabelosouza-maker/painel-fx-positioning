@@ -5,9 +5,11 @@ import pandas as pd
 from config import (
     CODIGO_CAMBIO,
     DURATIONS,
+    OFFSHORE_ADJ_CUTOVER,
     SERIES_BANCOS,
     SERIES_FX_ALL,
     SERIES_NAMES_ALL,
+    SERIES_SPOT_NR_NETO,
     SERIES_SWAP_LOCAL,
     SERIES_SWAP_OFFSHORE,
     SERIES_SWAP_TOTAL,
@@ -250,6 +252,47 @@ def build_swap_data() -> dict:
         "ate2y_dv01": ate2y_df,
         "delta_tables": delta_tables,
     }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Offshore Ajustado
+# ──────────────────────────────────────────────────────────────────────
+def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
+    """Constroi serie de offshore ajustado.
+
+    Ate 21-nov-2025: posicao offshore original (No residentes).
+    A partir de 24-nov-2025: offshore original + soma acumulada do spot
+    (spot comeca a acumular em 24-nov-2025).
+
+    Retorna DataFrame com Data, Offshore_Adj, USDCLP.
+    """
+    cutover = pd.Timestamp(OFFSHORE_ADJ_CUTOVER)
+
+    # Buscar spot No Residentes Neto (fluxo diario)
+    spot_raw = fetch_bcentral_series(SERIES_SPOT_NR_NETO)
+    spot_raw["Data"] = pd.to_datetime(spot_raw["date_str"], dayfirst=True, errors="coerce")
+    spot_raw = spot_raw.dropna(subset=["Data", "value"])
+    spot_raw = spot_raw[spot_raw["Data"].dt.dayofweek < 5]  # remove weekends
+    spot_df = spot_raw[["Data", "value"]].rename(columns={"value": "spot_neto"})
+    spot_df = spot_df.sort_values("Data").reset_index(drop=True)
+
+    # Merge com dados FX
+    result = dados[["Data", "No residentes", "USDCLP"]].copy()
+    result = result.merge(spot_df, on="Data", how="left")
+    result["spot_neto"] = result["spot_neto"].fillna(0.0)
+
+    # Soma acumulada do spot a partir do cutover
+    result["spot_cumsum"] = 0.0
+    mask = result["Data"] >= cutover
+    result.loc[mask, "spot_cumsum"] = result.loc[mask, "spot_neto"].cumsum()
+
+    # Offshore ajustado
+    result["Offshore_Adj"] = result["No residentes"].copy()
+    result.loc[mask, "Offshore_Adj"] = (
+        result.loc[mask, "No residentes"] + result.loc[mask, "spot_cumsum"]
+    )
+
+    return result[["Data", "Offshore_Adj", "USDCLP"]].dropna(subset=["Offshore_Adj"])
 
 
 # ──────────────────────────────────────────────────────────────────────

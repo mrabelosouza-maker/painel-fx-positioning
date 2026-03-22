@@ -84,6 +84,7 @@
     <div class="tab-bar">
         <button class="tab-btn active" onclick="showTab('pension')">FUNDOS DE PENSÃO</button>
         <button class="tab-btn" onclick="showTab('offshore')">OFFSHORE</button>
+        <button class="tab-btn" onclick="showTab('offadj')">OFFSHORE AJUSTADO</button>
         <button class="tab-btn" onclick="showTab('corporate')">CORPORATE</button>
         <button class="tab-btn" onclick="showTab('banks')">POSIÇÃO DOS BANCOS</button>
         <button class="tab-btn" onclick="showTab('total')">TOTAL VS USDCLP</button>
@@ -117,6 +118,20 @@
         <div class="row">
             <div class="panel">{{ offshore_delta7 | safe }}</div>
             <div class="panel">{{ offshore_delta28 | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- OFFSHORE AJUSTADO -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-offadj" class="tab-content">
+        <div class="row">
+            <div class="panel panel-wide">{{ offadj_chart | safe }}</div>
+            <div class="panel panel-narrow">{{ offadj_table | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ offadj_delta7 | safe }}</div>
+            <div class="panel">{{ offadj_delta28 | safe }}</div>
         </div>
     </div>
 

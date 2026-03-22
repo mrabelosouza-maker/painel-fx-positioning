@@ -107,6 +107,12 @@ TENOR_DURATION_MAP = {
 }
 
 # ──────────────────────────────────────────────────────────────────────
+# Offshore Ajustado
+# ──────────────────────────────────────────────────────────────────────
+SERIES_SPOT_NR_NETO = "F099.SPT.FLU.Z.40.N.NR.NET.Z.MMUSD.MLME.Z.Z.0.D"
+OFFSHORE_ADJ_CUTOVER = "2025-11-24"  # a partir desta data, soma spot acumulado
+
+# ──────────────────────────────────────────────────────────────────────
 # Colombia
 # ──────────────────────────────────────────────────────────────────────
 COLOMBIA_API_URL = "https://www.datos.gov.co/resource/32sa-8pi3.json"

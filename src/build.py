@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from data_processor import build_fx_dados, compute_deltas, build_swap_data, build_colombia_data
+from data_processor import build_fx_dados, compute_deltas, build_swap_data, build_colombia_data, build_offshore_adjusted
 from chart_builder import (
     make_line_chart,
     make_bar_chart,
@@ -139,6 +139,47 @@ def build_swap_section(swap_data):
     return ctx
 
 
+def build_offshore_adj_section(dados):
+    """Gera charts e tables para a aba Offshore Ajustado."""
+    ctx = {}
+    adj_df = build_offshore_adjusted(dados)
+
+    fx_labels = {
+        "delta_1d": "Delta 1D",
+        "delta_7d": "Delta 7D",
+        "delta_28d": "Delta 28D",
+    }
+
+    # Dual-axis: Offshore Ajustado vs USDCLP
+    ctx["offadj_chart"] = make_dual_axis_chart(
+        adj_df, "Data", "Offshore_Adj", "USDCLP",
+        title="Offshore Ajustado (NDF + Spot Acum.) vs USDCLP",
+        y1_name="Offshore Adj (USD mm)", y2_name="USDCLP",
+        y1_color="dodgerblue", y2_color="red",
+        invert_y2=True,
+    )
+
+    # Tabela: ultimas 5 linhas com deltas
+    col = "Offshore_Adj"
+    df_deltas = compute_deltas(adj_df, col, [1, 7, 28])
+    ctx["offadj_table"] = make_summary_table(
+        df_deltas, [col, "delta_1d", "delta_7d", "delta_28d"],
+        col_labels={col: "Nivel", **fx_labels},
+    )
+
+    # Bar charts de delta
+    ctx["offadj_delta7"] = make_bar_chart(
+        df_deltas, "Data", "delta_7d",
+        "DELTA 7 DIAS: Offshore Ajustado (USD million)",
+    )
+    ctx["offadj_delta28"] = make_bar_chart(
+        df_deltas, "Data", "delta_28d",
+        "DELTA 28 DIAS: Offshore Ajustado (USD million)",
+    )
+
+    return ctx
+
+
 def build_colombia_section(col_data):
     """Gera charts e tables para Colombia."""
     ctx = {}
@@ -200,6 +241,7 @@ def main():
     context["build_timestamp"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
 
     context.update(build_fx_section(dados))
+    context.update(build_offshore_adj_section(dados))
     context.update(build_swap_section(swap_data))
     context.update(build_colombia_section(col_data))
 
