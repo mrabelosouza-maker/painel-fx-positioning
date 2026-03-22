@@ -88,6 +88,31 @@ def fetch_bcentral_matrix(
 
 
 # ──────────────────────────────────────────────────────────────────────
+# USDCLP Closing (Yahoo Finance)
+# ──────────────────────────────────────────────────────────────────────
+def fetch_usdclp_closing(start: str = "2022-06-01") -> pd.DataFrame:
+    """Busca USDCLP fechamento via Yahoo Finance. Fallback para BCCh."""
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker("USDCLP=X")
+        hist = ticker.history(start=start)
+        if hist.empty:
+            raise ValueError("Yahoo Finance retornou vazio")
+        df = hist[["Close"]].reset_index()
+        df = df.rename(columns={"Date": "Data", "Close": "USDCLP"})
+        df["Data"] = pd.to_datetime(df["Data"]).dt.tz_localize(None)
+        logger.info("USDCLP closing via Yahoo Finance: %d linhas", len(df))
+        return df[["Data", "USDCLP"]]
+    except Exception as e:
+        logger.warning("Yahoo Finance falhou (%s), usando BCCh (media)...", e)
+        from config import CODIGO_CAMBIO
+        raw = fetch_bcentral_series(CODIGO_CAMBIO)
+        raw["Data"] = pd.to_datetime(raw["date_str"], dayfirst=True, errors="coerce")
+        raw = raw.rename(columns={"value": "USDCLP"})
+        return raw[["Data", "USDCLP"]].dropna()
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Colombia
 # ──────────────────────────────────────────────────────────────────────
 def fetch_colombia_cop() -> pd.DataFrame:

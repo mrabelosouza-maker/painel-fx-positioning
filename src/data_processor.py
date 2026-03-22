@@ -21,6 +21,7 @@ from data_fetcher import (
     fetch_bcentral_series,
     fetch_colombia_cop,
     fetch_colombia_forwards,
+    fetch_usdclp_closing,
 )
 
 
@@ -28,9 +29,8 @@ from data_fetcher import (
 # FX Positioning
 # ──────────────────────────────────────────────────────────────────────
 def build_fx_dados() -> pd.DataFrame:
-    """Replica build_dados() do R: busca series FX + cambio, join, parse datas."""
+    """Busca series FX + USDCLP closing (Yahoo Finance), join, parse datas."""
     matrix = fetch_bcentral_matrix(SERIES_FX_ALL)
-    cambio = fetch_bcentral_series(CODIGO_CAMBIO)
 
     # rename columns
     col_map = {"date_str": "date_str"}
@@ -38,13 +38,13 @@ def build_fx_dados() -> pd.DataFrame:
         col_map[f"V{i}"] = name
     matrix = matrix.rename(columns=col_map)
 
-    # merge with cambio
-    cambio = cambio.rename(columns={"value": "USDCLP"})
-    dados = matrix.merge(cambio, on="date_str", how="inner")
-
     # parse date
-    dados["Data"] = pd.to_datetime(dados["date_str"], dayfirst=True, errors="coerce")
-    dados = dados.drop(columns=["date_str"]).dropna(subset=["Data"])
+    matrix["Data"] = pd.to_datetime(matrix["date_str"], dayfirst=True, errors="coerce")
+    matrix = matrix.drop(columns=["date_str"]).dropna(subset=["Data"])
+
+    # merge with USDCLP closing (Yahoo Finance)
+    cambio = fetch_usdclp_closing()
+    dados = matrix.merge(cambio, on="Data", how="left")
 
     # Remover fins de semana e feriados (linhas onde todos os valores sao NaN)
     value_cols = [c for c in dados.columns if c not in ("Data", "USDCLP")]
@@ -132,11 +132,10 @@ def build_swap_data() -> dict:
     offshore_df = _fetch_swap_group(SERIES_SWAP_OFFSHORE)
     local_df = _fetch_swap_group(SERIES_SWAP_LOCAL)
 
-    # Fetch cambio
-    cambio_raw = fetch_bcentral_series(CODIGO_CAMBIO)
-    cambio_df = cambio_raw.rename(columns={"value": "cambio", "date_str": "ds"})
-    cambio_df["Data"] = pd.to_datetime(cambio_df["ds"], dayfirst=True, errors="coerce")
-    cambio_df = cambio_df[["Data", "cambio"]].dropna(subset=["Data", "cambio"]).sort_values("Data").reset_index(drop=True)
+    # Fetch cambio (Yahoo Finance closing)
+    cambio_yf = fetch_usdclp_closing()
+    cambio_df = cambio_yf.rename(columns={"USDCLP": "cambio"})
+    cambio_df = cambio_df.dropna(subset=["Data", "cambio"]).sort_values("Data").reset_index(drop=True)
 
     # Rename offshore/local columns
     offshore_renamed = offshore_df.copy()
