@@ -43,6 +43,11 @@ def build_fx_dados() -> pd.DataFrame:
     # parse date
     dados["Data"] = pd.to_datetime(dados["date_str"], dayfirst=True, errors="coerce")
     dados = dados.drop(columns=["date_str"]).dropna(subset=["Data"])
+
+    # Remover fins de semana e feriados (linhas onde todos os valores sao NaN)
+    value_cols = [c for c in dados.columns if c not in ("Data", "USDCLP")]
+    dados = dados.dropna(subset=value_cols, how="all")
+
     dados = dados.sort_values("Data").reset_index(drop=True)
     return dados
 
@@ -102,6 +107,11 @@ def _fetch_swap_group(series_codes: list[str]) -> pd.DataFrame:
     matrix = matrix.rename(columns=col_map)
     matrix["Data"] = pd.to_datetime(matrix["date_str"], dayfirst=True, errors="coerce")
     matrix = matrix.drop(columns=["date_str"]).dropna(subset=["Data"])
+
+    # Remover fins de semana/feriados (linhas com todos os valores NaN)
+    value_cols = [c for c in matrix.columns if c != "Data"]
+    matrix = matrix.dropna(subset=value_cols, how="all")
+
     return matrix.sort_values("Data").reset_index(drop=True)
 
 
@@ -124,7 +134,7 @@ def build_swap_data() -> dict:
     cambio_raw = fetch_bcentral_series(CODIGO_CAMBIO)
     cambio_df = cambio_raw.rename(columns={"value": "cambio", "date_str": "ds"})
     cambio_df["Data"] = pd.to_datetime(cambio_df["ds"], dayfirst=True, errors="coerce")
-    cambio_df = cambio_df[["Data", "cambio"]].dropna().sort_values("Data").reset_index(drop=True)
+    cambio_df = cambio_df[["Data", "cambio"]].dropna(subset=["Data", "cambio"]).sort_values("Data").reset_index(drop=True)
 
     # Rename offshore/local columns
     offshore_renamed = offshore_df.copy()
