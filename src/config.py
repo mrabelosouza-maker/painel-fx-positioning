@@ -123,3 +123,18 @@ COLOMBIA_BANREP_URL = (
 COLOMBIA_LOCAL_FALLBACK = (
     r"R:\Macro EMs\Colombia\7. Externo\series.xlsx"
 )
+
+# ──────────────────────────────────────────────────────────────────────
+# Oracle DB (Bloomberg data)
+# ──────────────────────────────────────────────────────────────────────
+ORACLE_UID = "jbamacroreader"
+ORACLE_PWD = "Napo1821"
+ORACLE_HOST = "jgporaclesrv.jgpdomain.local"
+ORACLE_PORT = 1521
+ORACLE_CONN_STR = (
+    f"oracle+oracledb://{ORACLE_UID}:{ORACLE_PWD}@{ORACLE_HOST}:{ORACLE_PORT}/ORCL"
+)
+
+# Bloomberg tickers for FX closing prices
+BBG_TICKER_USDCLP = "CLP Curncy"
+BBG_TICKER_USDCOP = "COP Curncy"

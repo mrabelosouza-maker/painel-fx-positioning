@@ -13,9 +13,12 @@ from config import (
     BCENTRAL_FIRSTDATE,
     BCENTRAL_PASS,
     BCENTRAL_USER,
+    BBG_TICKER_USDCLP,
+    BBG_TICKER_USDCOP,
     COLOMBIA_API_URL,
     COLOMBIA_BANREP_URL,
     COLOMBIA_LOCAL_FALLBACK,
+    ORACLE_CONN_STR,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,7 +91,69 @@ def fetch_bcentral_matrix(
 
 
 # ──────────────────────────────────────────────────────────────────────
-# USDCLP Closing (Yahoo Finance)
+# Oracle DB (Bloomberg data)
+# ──────────────────────────────────────────────────────────────────────
+_oracle_engine = None
+
+def _get_oracle_engine():
+    """Cria (ou reutiliza) engine SQLAlchemy para o Oracle."""
+    global _oracle_engine
+    if _oracle_engine is None:
+        from sqlalchemy import create_engine
+        _oracle_engine = create_engine(
+            ORACLE_CONN_STR,
+            max_identifier_length=128,
+            pool_recycle=3600,
+            pool_pre_ping=True,
+            pool_size=5,
+            max_overflow=10,
+        )
+    return _oracle_engine
+
+
+def fetch_bbg_closing(ticker: str, col_name: str, start: str = "2022-06-01") -> pd.DataFrame:
+    """Busca preco de fechamento (PX_LAST) via Oracle DB (Bloomberg).
+
+    Retorna DataFrame com colunas [Data, col_name].
+    """
+    try:
+        from sqlalchemy import text
+        engine = _get_oracle_engine()
+        query = text("""
+            SELECT DATUM_DATE, NUMBER_VALUE
+            FROM (
+                SELECT BBG_SUBQUERY.*,
+                    RANK() OVER (
+                        PARTITION BY BBG_SUBQUERY.SERIES_CODE,
+                                     BBG_SUBQUERY.RELEASE_STAGE_OVERRIDE,
+                                     BBG_SUBQUERY.DATUM_DATE
+                        ORDER BY BBG_SUBQUERY.UPDATED_AT DESC
+                    ) DEST_RANK
+                FROM (
+                    SELECT * FROM ODS.MACRO_BBG
+                    WHERE field = :field
+                      AND ticker = :ticker
+                      AND DATUM_DATE >= TO_DATE(:start_date, 'YYYY-MM-DD')
+                ) BBG_SUBQUERY
+            )
+            WHERE DEST_RANK = 1
+            ORDER BY DATUM_DATE
+        """)
+        params = {"field": "PX_LAST", "ticker": ticker, "start_date": start}
+        df = pd.read_sql_query(query, engine, params=params)
+        df.columns = df.columns.str.upper()
+        df["Data"] = pd.to_datetime(df["DATUM_DATE"])
+        df[col_name] = pd.to_numeric(df["NUMBER_VALUE"], errors="coerce")
+        df = df[["Data", col_name]].dropna()
+        logger.info("%s closing via Oracle DB: %d linhas", ticker, len(df))
+        return df
+    except Exception as e:
+        logger.warning("Oracle DB %s falhou: %s", ticker, e)
+        return pd.DataFrame(columns=["Data", col_name])
+
+
+# ──────────────────────────────────────────────────────────────────────
+# USDCLP / USDCOP Closing (Yahoo Finance fallback)
 # ──────────────────────────────────────────────────────────────────────
 def fetch_yfinance_closing(ticker_str: str, col_name: str, start: str = "2022-06-01") -> pd.DataFrame:
     """Busca preco de fechamento via Yahoo Finance.
@@ -112,7 +177,11 @@ def fetch_yfinance_closing(ticker_str: str, col_name: str, start: str = "2022-06
 
 
 def fetch_usdclp_closing(start: str = "2022-06-01") -> pd.DataFrame:
-    """Busca USDCLP fechamento via Yahoo Finance. Fallback para BCCh."""
+    """Busca USDCLP fechamento via Oracle DB. Fallback: Yahoo Finance, depois BCCh."""
+    df = fetch_bbg_closing(BBG_TICKER_USDCLP, "USDCLP", start)
+    if not df.empty:
+        return df
+    logger.warning("Fallback para Yahoo Finance para USDCLP...")
     df = fetch_yfinance_closing("USDCLP=X", "USDCLP", start)
     if not df.empty:
         return df
@@ -125,7 +194,11 @@ def fetch_usdclp_closing(start: str = "2022-06-01") -> pd.DataFrame:
 
 
 def fetch_usdcop_closing(start: str = "2016-01-01") -> pd.DataFrame:
-    """Busca USDCOP fechamento via Yahoo Finance. Fallback para datos.gov.co."""
+    """Busca USDCOP fechamento via Oracle DB. Fallback: Yahoo Finance, depois datos.gov.co."""
+    df = fetch_bbg_closing(BBG_TICKER_USDCOP, "USDCOP", start)
+    if not df.empty:
+        return df
+    logger.warning("Fallback para Yahoo Finance para USDCOP...")
     df = fetch_yfinance_closing("USDCOP=X", "USDCOP", start)
     if not df.empty:
         return df
