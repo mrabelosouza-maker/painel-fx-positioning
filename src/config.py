@@ -110,7 +110,9 @@ TENOR_DURATION_MAP = {
 # Offshore Ajustado
 # ──────────────────────────────────────────────────────────────────────
 SERIES_SPOT_NR_NETO = "F099.SPT.FLU.Z.40.N.NR.NET.Z.MMUSD.MLME.Z.Z.0.D"
-OFFSHORE_ADJ_CUTOVER = "2025-11-24"  # a partir desta data, soma spot acumulado
+OFFSHORE_ADJ_CUTOVER = "2025-12-15"  # a partir desta data, soma spot acumulado
+# 15-dez-2025 = 1o dia util apos o 2o turno, mesma ancora do Santander.
+# Trocar a ancora e um deslocamento aditivo puro: muda o nivel, nao a forma nem o z-score.
 
 # ──────────────────────────────────────────────────────────────────────
 # Colombia

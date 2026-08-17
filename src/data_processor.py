@@ -260,9 +260,9 @@ def build_swap_data() -> dict:
 def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
     """Constroi serie de offshore ajustado.
 
-    Ate 21-nov-2025: posicao offshore original (No residentes).
-    A partir de 24-nov-2025: offshore original + soma acumulada do spot
-    (spot comeca a acumular em 24-nov-2025).
+    Antes do cutover (OFFSHORE_ADJ_CUTOVER): posicao offshore original
+    (No residentes). A partir do cutover: offshore original + soma acumulada
+    do spot liquido de nao residentes, que comeca a acumular na data do cutover.
 
     Retorna DataFrame com Data, Offshore_Adj, USDCLP.
     """
