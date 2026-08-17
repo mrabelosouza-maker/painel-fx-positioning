@@ -13,7 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from data_processor import build_fx_dados, compute_deltas, build_swap_data, build_colombia_data, build_offshore_adjusted
+from data_processor import (
+    build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
+    build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
+)
 from chart_builder import (
     make_line_chart,
     make_bar_chart,
@@ -22,6 +25,9 @@ from chart_builder import (
     make_swap_line_chart,
     make_swap_delta_bars,
     make_colombia_line_chart,
+    make_weekly_legs_bars,
+    make_weekly_legs_scatter,
+    make_offshore_corr_chart,
 )
 from table_builder import make_summary_table, make_swap_delta_table
 
@@ -147,6 +153,20 @@ def build_offshore_adj_section(dados):
     """Gera charts e tables para a aba Offshore Ajustado."""
     ctx = {}
     adj_df = build_offshore_adjusted(dados)
+
+    # As duas pernas por semana e a correlacao entre elas (antes de inverter o sinal
+    # de Offshore_Adj: essas funcoes leem as colunas cruas "No residentes"/"spot_neto")
+    wk = build_weekly_legs(adj_df)
+    ctx["offadj_weekly_bars"] = make_weekly_legs_bars(
+        wk, "SEMANAL: Spot vs Δ NDF do offshore (USD million, + long USD)",
+    )
+    ctx["offadj_weekly_scatter"] = make_weekly_legs_scatter(
+        wk, "SEMANAL: Spot vs Δ NDF, cor = tempo (diagonal = hedge perfeito)",
+    )
+    ctx["offadj_corr"] = make_offshore_corr_chart(
+        build_offshore_corr(adj_df),
+        "Correlação móvel entre as pernas: NDF (saldo) vs spot acumulado",
+    )
 
     # Inverter sinal: positivo = long USD, negativo = short USD
     adj_df["Offshore_Adj"] = -adj_df["Offshore_Adj"]

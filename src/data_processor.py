@@ -292,7 +292,48 @@ def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
         result.loc[mask, "No residentes"] + result.loc[mask, "spot_cumsum"]
     )
 
-    return result[["Data", "Offshore_Adj", "USDCLP"]].dropna(subset=["Offshore_Adj"])
+    return result[
+        ["Data", "Offshore_Adj", "USDCLP", "No residentes", "spot_neto"]
+    ].dropna(subset=["Offshore_Adj"])
+
+
+def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega as duas pernas do offshore por semana (sexta a sexta).
+
+    Tudo em convencao long USD, positivo = offshore comprando dolar:
+      spot_wk : soma semanal do fluxo spot liquido
+      dndf_wk : variacao semanal do saldo de NDF
+      net_wk  : soma das duas = variacao semanal da posicao ajustada
+    """
+    d = adj_df.set_index("Data").sort_index()
+    ndf_long = -d["No residentes"]   # BCCh reporta pela otica do banco residente
+    spot_long = -d["spot_neto"]
+    wk = pd.DataFrame({
+        "spot_wk": spot_long.resample("W-FRI").sum(),
+        "dndf_wk": ndf_long.resample("W-FRI").last().diff(),
+    }).dropna()
+    wk["net_wk"] = wk["spot_wk"] + wk["dndf_wk"]
+    return wk.rename_axis("Semana").reset_index()
+
+
+def build_offshore_corr(
+    adj_df: pd.DataFrame, windows: tuple = (15, 30, 90)
+) -> pd.DataFrame:
+    """Correlacao movel entre as duas pernas do offshore, em nivel.
+
+    NDF (saldo) contra spot acumulado, ambos em convencao long USD: logo
+    -1 = espelho perfeito (o forward e so o hedge do spot) e +1 = as duas
+    pernas somam risco. O acumulado usa a amostra inteira de proposito --
+    correlacao e invariante a deslocamento constante, entao nao depende da
+    ancora do ajuste e assim tem historia antes dela.
+    """
+    d = adj_df.set_index("Data").sort_index()
+    ndf_long = -d["No residentes"]
+    spot_cum = (-d["spot_neto"]).cumsum()
+    out = pd.DataFrame({
+        f"corr_{w}d": ndf_long.rolling(w).corr(spot_cum) for w in windows
+    })
+    return out.dropna(how="all").rename_axis("Data").reset_index()
 
 
 # ──────────────────────────────────────────────────────────────────────

@@ -175,6 +175,174 @@ def make_dual_series_chart(
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Offshore: as duas pernas (spot vs NDF)
+# ──────────────────────────────────────────────────────────────────────
+def _long_short_labels(fig: go.Figure, ymax: float, ymin: float) -> None:
+    """Marca no grafico que acima de zero e long USD e abaixo e short USD."""
+    for y, text, color in [
+        (ymax * 0.88, "▲ acima de zero: comprando USD (long USD)", "green"),
+        (ymin * 0.88, "▼ abaixo de zero: vendendo USD (short USD)", "red"),
+    ]:
+        fig.add_annotation(
+            xref="paper", x=0.01, y=y, yref="y", text=text, showarrow=False,
+            font=dict(color=color, size=11), xanchor="left",
+            bgcolor="rgba(255,255,255,0.75)",
+        )
+
+
+def make_weekly_legs_bars(
+    wk: pd.DataFrame,
+    title: str,
+    weeks_default: int = 12,
+) -> str:
+    """Barras agrupadas por semana: perna spot e variacao do NDF, em long USD.
+
+    Abre mostrando as ultimas `weeks_default` semanas; duplo-clique no grafico
+    devolve a serie inteira (autoscale nativo do Plotly).
+    """
+    if wk.empty:
+        return "<p>Dados indisponíveis</p>"
+
+    x_str = _date_strings(wk["Semana"])
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=x_str, y=wk["spot_wk"], name="Spot (fluxo da semana)",
+        marker_color="darkorange",
+        hovertemplate="semana de %{x}<br>spot: %{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=x_str, y=wk["dndf_wk"], name="NDF (Δ saldo na semana)",
+        marker_color="dodgerblue",
+        hovertemplate="semana de %{x}<br>Δ NDF: %{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+
+    fig.update_layout(
+        title=title, barmode="group", bargap=0.25, bargroupgap=0.05,
+        template="plotly_white", height=420,
+        margin=dict(l=60, r=20, t=50, b=70),
+        yaxis_title="USD million (+ long USD)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    _apply_category_xaxis(fig, nticks=14)
+
+    # Janela inicial: ultimas N semanas (eixo categorico -> range por indice).
+    # O eixo y escala para essa janela, senao as barras ficam achatadas contra
+    # os extremos do historico. Duplo-clique faz autoscale dos dois eixos.
+    n = len(x_str)
+    visivel = wk.tail(weeks_default) if n > weeks_default else wk
+    vals = pd.concat([visivel["spot_wk"], visivel["dndf_wk"]]).dropna()
+    lim = vals.abs().max() * 1.30 if len(vals) else 1.0
+    fig.update_yaxes(range=[-lim, lim])
+    _long_short_labels(fig, lim, -lim)
+    if n > weeks_default:
+        fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
+    return _to_html(fig)
+
+
+def make_weekly_legs_scatter(wk: pd.DataFrame, title: str) -> str:
+    """Scatter semanal: spot no x, Δ NDF no y, cor = tempo.
+
+    Pontos sobre a diagonal y = -x significam hedge perfeito na semana.
+    """
+    if wk.empty:
+        return "<p>Dados indisponíveis</p>"
+
+    t = wk["Semana"]
+    tnum = (t - t.min()).dt.days
+    # ticks da colorbar em datas legiveis
+    idx = [0, len(t) // 3, 2 * len(t) // 3, len(t) - 1]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=wk["spot_wk"], y=wk["dndf_wk"], mode="markers",
+        marker=dict(
+            size=9, color=tnum, colorscale="Viridis",
+            showscale=True, line=dict(width=1, color="white"),
+            colorbar=dict(
+                title=dict(text="semana", side="right"), thickness=12,
+                tickvals=[tnum.iloc[i] for i in idx],
+                ticktext=[t.iloc[i].strftime("%b-%y") for i in idx],
+            ),
+        ),
+        customdata=_date_strings(t),
+        hovertemplate=("semana de %{customdata}<br>spot: %{x:+,.0f}"
+                       "<br>Δ NDF: %{y:+,.0f}<extra></extra>"),
+    ))
+
+    # Escalas independentes: o Δ NDF tem varias vezes a dispersao do spot, e
+    # forcar escala igual colapsa a nuvem numa faixa. A reta y = -x continua
+    # correta em coordenadas de dado, so nao aparece a 45 graus -- por isso o
+    # rotulo diz a relacao em vez de depender da inclinacao.
+    xlim = wk["spot_wk"].abs().max() * 1.15
+    ylim = wk["dndf_wk"].abs().max() * 1.15
+    fig.add_shape(type="line", x0=-xlim, y0=xlim, x1=xlim, y1=-xlim,
+                  line=dict(color="gray", width=1, dash="dash"))
+    fig.add_annotation(
+        x=-xlim * 0.80, y=xlim * 0.80, text="hedge perfeito (y = −x)",
+        showarrow=False, font=dict(color="gray", size=10),
+        yanchor="bottom", bgcolor="rgba(255,255,255,0.75)",
+    )
+    fig.add_hline(y=0, line_color="black", line_width=0.5)
+    fig.add_vline(x=0, line_color="black", line_width=0.5)
+    fig.update_layout(
+        title=title, template="plotly_white", height=420,
+        margin=dict(l=60, r=20, t=50, b=60),
+        xaxis_title="Spot na semana (USD mm, + long USD)",
+        yaxis_title="Δ NDF na semana (USD mm, + long USD)",
+        showlegend=False,
+    )
+    fig.update_xaxes(range=[-xlim, xlim], zeroline=False)
+    fig.update_yaxes(range=[-ylim, ylim], zeroline=False)
+    return _to_html(fig)
+
+
+def make_offshore_corr_chart(corr_df: pd.DataFrame, title: str) -> str:
+    """Correlacao movel entre as pernas (15/30/90 dias). -1 = hedge puro."""
+    if corr_df.empty:
+        return "<p>Dados indisponíveis</p>"
+
+    x_str = _date_strings(corr_df["Data"])
+    fig = go.Figure()
+    # rampa ordinal: janela mais curta clara, mais longa escura
+    for col, color, width in [
+        ("corr_15d", "#86b6ef", 1.2),
+        ("corr_30d", "#2a78d6", 1.6),
+        ("corr_90d", "#104281", 2.2),
+    ]:
+        if col not in corr_df.columns:
+            continue
+        fig.add_trace(go.Scatter(
+            x=x_str, y=corr_df[col], mode="lines",
+            name=f"{col.replace('corr_', '')} úteis",
+            line=dict(color=color, width=width),
+            hovertemplate="%{x}<br>%{y:+.2f}<extra></extra>",
+        ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+    fig.add_hline(y=-0.5, line_color="gray", line_width=1, line_dash="dot")
+
+    for y, text, anchor in [
+        (-0.93, "−1: espelho perfeito, o forward é só hedge do spot", "bottom"),
+        (0.93, "+1: mesma direção, as duas pernas somam risco", "top"),
+    ]:
+        fig.add_annotation(
+            xref="paper", x=0.01, y=y, yref="y", text=text, showarrow=False,
+            font=dict(color="dimgray", size=10), xanchor="left", yanchor=anchor,
+            bgcolor="rgba(255,255,255,0.75)",
+        )
+
+    fig.update_layout(
+        title=title, template="plotly_white", height=420,
+        margin=dict(l=60, r=20, t=50, b=70),
+        yaxis_title="correlação entre as pernas",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_yaxes(range=[-1.05, 1.05], dtick=0.5)
+    _apply_category_xaxis(fig)
+    return _to_html(fig)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Swap Camara charts
 # ──────────────────────────────────────────────────────────────────────
 def make_swap_line_chart(
