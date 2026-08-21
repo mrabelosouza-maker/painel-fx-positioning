@@ -119,7 +119,8 @@ OFFSHORE_ADJ_CUTOVER = "2025-12-15"  # a partir desta data, soma spot acumulado
 # ──────────────────────────────────────────────────────────────────────
 COLOMBIA_API_URL = "https://www.datos.gov.co/resource/32sa-8pi3.json"
 COLOMBIA_BANREP_URL = (
-    "https://www.banrep.gov.co/sites/default/files/"
+    "https://suameca.banrep.gov.co/archivos/"
+    "sector_externo_tasas_cambio_derivados/mercado_derivados/"
     "series-historico-forward-desde-2016.xlsx"
 )
 COLOMBIA_LOCAL_FALLBACK = (
