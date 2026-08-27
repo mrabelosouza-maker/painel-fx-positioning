@@ -3,13 +3,16 @@ import numpy as np
 import pandas as pd
 
 from config import (
+    AFP_FUND_TYPES,
     CODIGO_CAMBIO,
     DURATIONS,
     OFFSHORE_ADJ_CUTOVER,
     SERIES_BANCOS,
     SERIES_FX_ALL,
     SERIES_NAMES_ALL,
+    SERIES_NDF_PENSION_NAME,
     SERIES_SPOT_NR_NETO,
+    SERIES_SPOT_PENSION,
     SERIES_SWAP_LOCAL,
     SERIES_SWAP_OFFSHORE,
     SERIES_SWAP_TOTAL,
@@ -17,6 +20,7 @@ from config import (
     TENOR_DURATION_MAP,
 )
 from data_fetcher import (
+    fetch_afp_flows_and_weights,
     fetch_bcentral_matrix,
     fetch_bcentral_series,
     fetch_colombia_cop,
@@ -400,3 +404,139 @@ def build_colombia_data() -> dict:
     table_data = table_df[["Fecha", "Nivel", "Delta", "% USDCOP"]].tail(5)
 
     return {"series": series, "table_data": table_data}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Fluxo AFP: NDF + spot
+# ──────────────────────────────────────────────────────────────────────
+# Convencao unica desta secao: acima de zero = compra de CLP, abaixo de zero =
+# venda de CLP. Unidade MM USD.
+#
+#   NDF            a serie crua do BCCh e o nivel visto pelo banco residente:
+#                  positivo = AFP net short USD. Aumentar o short e vender mais
+#                  USD a termo, ou seja comprar CLP -> +delta do nivel.
+#   spot observado a serie crua do BCCh e fluxo visto pelo banco residente:
+#                  positivo = banco compra USD do AFP = AFP compra CLP -> +valor.
+#   spot proxy     a construcao da demanda de USD dos AFPs: comprar USD e vender
+#                  CLP -> sinal invertido.
+def build_afp_spot_flow(dados: pd.DataFrame) -> pd.DataFrame:
+    """Monta as tres pernas do fluxo dos fundos de pensao, em compra-de-CLP.
+
+    O proxy de spot pondera o fluxo diario de cada tipo de fundo pela fatia
+    offshore daquele fundo: quando o dinheiro se concentra nos fundos mais
+    arriscados (A, 84% offshore) em vez dos conservadores (E, 13%), uma fatia
+    maior vira compra de dolar.
+
+    Retorna DataFrame com Data, as tres pernas ja em compra-de-CLP, a
+    decomposicao do proxy em dinheiro novo e switch, e USDCLP.
+    """
+    afp = fetch_afp_flows_and_weights()
+    if afp.empty:
+        return pd.DataFrame()
+
+    flow_cols = [f"flow_{f}" for f in AFP_FUND_TYPES]
+    woff_cols = [f"woff_{f}" for f in AFP_FUND_TYPES]
+    aum_cols = [f"aum_{f}" for f in AFP_FUND_TYPES]
+
+    fx = dados.set_index("Data")["USDCLP"]
+    fx = fx.reindex(fx.index.union(afp.index)).ffill().reindex(afp.index)
+
+    # Fluxo por fundo de MM CLP para MM USD.
+    flows_usd = afp[flow_cols].div(fx, axis=0)
+    flows_usd.columns = AFP_FUND_TYPES
+    w = afp[woff_cols].copy()
+    w.columns = AFP_FUND_TYPES
+    aum = afp[aum_cols].copy()
+    aum.columns = AFP_FUND_TYPES
+
+    usd_demand = (flows_usd * w).sum(axis=1, min_count=1)
+
+    # Decomposicao: w_barra e a fatia offshore media do sistema, ponderada pelo
+    # AUM de cada fundo. O que sobra e realocacao entre tipos de fundo.
+    w_bar = (aum * w).sum(axis=1) / aum.sum(axis=1)
+    new_money = flows_usd.sum(axis=1, min_count=1) * w_bar
+    switch = usd_demand - new_money
+
+    # Perna de NDF: variacao do nivel do BCCh, dias corridos, mesma convencao de
+    # compute_deltas usada nas outras abas do painel.
+    ndf = compute_deltas(
+        dados[["Data", SERIES_NDF_PENSION_NAME, "USDCLP"]].dropna(
+            subset=[SERIES_NDF_PENSION_NAME]
+        ),
+        SERIES_NDF_PENSION_NAME, [1, 7],
+    ).set_index("Data")
+
+    # Perna de spot observado pelo BCCh.
+    spot_raw = fetch_bcentral_series(SERIES_SPOT_PENSION)
+    spot_raw["Data"] = pd.to_datetime(spot_raw["date_str"], dayfirst=True, errors="coerce")
+    spot_raw = spot_raw.dropna(subset=["Data", "value"])
+    spot_bcch = spot_raw.set_index("Data")["value"]
+
+    # Indice uniao: as tres fontes tem defasagem diferente e o painel precisa
+    # mostrar o dado mais fresco de cada uma, nao truncar todas na mais atrasada.
+    idx = usd_demand.index.union(ndf.index).union(spot_bcch.index).sort_values()
+    idx = idx[idx >= usd_demand.index.min()]
+
+    return pd.DataFrame({
+        "spot_proxy": -usd_demand,
+        "proxy_new_money": -new_money,
+        "proxy_switch": -switch,
+        "ndf_1d": ndf["delta_1d"],
+        "ndf_7d": ndf["delta_7d"],
+        "USDCLP": ndf["USDCLP"],
+        "spot_bcch": spot_bcch,
+    }, index=idx).rename_axis("Data").reset_index()
+
+
+def build_afp_7d_legs(afp_df: pd.DataFrame) -> dict:
+    """Acumulado dos ultimos 7 dias corridos de cada perna.
+
+    A janela termina na ultima data em que as tres pernas existem, porque as
+    fontes tem defasagem diferente (o BCCh publica um dia depois das planilhas,
+    ou o contrario, conforme o dia).
+    """
+    if afp_df.empty:
+        return {}
+
+    legs = ["ndf_7d", "spot_proxy", "spot_bcch"]
+    d = afp_df.set_index("Data").sort_index()
+
+    common = d[legs].dropna()
+    if common.empty:
+        return {}
+    anchor = common.index.max()
+    start = anchor - pd.Timedelta(days=7)
+
+    window = d.loc[(d.index > start) & (d.index <= anchor)]
+    return {
+        # ndf_7d ja e a variacao acumulada em 7 dias corridos: pegar o ponto da
+        # ancora, nao somar, senao conta o mesmo movimento sete vezes.
+        "ndf": d.loc[anchor, "ndf_7d"],
+        "spot_proxy": window["spot_proxy"].sum(),
+        "spot_bcch": window["spot_bcch"].sum(),
+        "anchor": anchor,
+        "start": window.index.min() if len(window) else anchor,
+        "last_dates": {
+            "NDF": d["ndf_7d"].last_valid_index(),
+            "Spot proxy": d["spot_proxy"].last_valid_index(),
+            "Spot BCCh": d["spot_bcch"].last_valid_index(),
+        },
+    }
+
+
+def build_afp_weekly_legs(afp_df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega as tres pernas por semana (sexta a sexta), em compra-de-CLP."""
+    if afp_df.empty:
+        return pd.DataFrame()
+
+    d = afp_df.set_index("Data").sort_index()
+    # ndf_1d e variacao de nivel dia a dia, entao somar a semana devolve a
+    # variacao de ponta a ponta do saldo.
+    wk = pd.DataFrame({
+        "ndf_wk": d["ndf_1d"].resample("W-FRI").sum(min_count=1),
+        "proxy_wk": d["spot_proxy"].resample("W-FRI").sum(min_count=1),
+        "bcch_wk": d["spot_bcch"].resample("W-FRI").sum(min_count=1),
+        "new_money_wk": d["proxy_new_money"].resample("W-FRI").sum(min_count=1),
+        "switch_wk": d["proxy_switch"].resample("W-FRI").sum(min_count=1),
+    })
+    return wk.dropna(how="all").rename_axis("Semana").reset_index()

@@ -91,3 +91,56 @@ def make_swap_delta_table(
         <tbody>{"".join(rows)}</tbody>
     </table>
     """
+
+
+def make_afp_legs_table(
+    afp_df: pd.DataFrame,
+    last_dates: dict = None,
+    n_rows: int = 5,
+) -> str:
+    """Tabela das tres pernas do fluxo AFP, em compra-de-CLP, mais net e % USDCLP.
+
+    O rodape traz a ultima data de cada fonte: elas tem defasagem diferente e o
+    leitor precisa ver isso antes de comparar as pernas.
+    """
+    if afp_df.empty:
+        return "<p>—</p>"
+
+    df = afp_df.copy()
+    df["net"] = df[["ndf_1d", "spot_proxy"]].sum(axis=1, min_count=1)
+    df["pct_usdclp"] = 100 * (np.log(df["USDCLP"]) - np.log(df["USDCLP"].shift(1)))
+
+    cols = [
+        ("ndf_1d", "NDF 1D"),
+        ("spot_proxy", "Spot proxy"),
+        ("spot_bcch", "Spot BCCh"),
+        ("net", "Net (NDF+proxy)"),
+        ("pct_usdclp", "% USDCLP"),
+    ]
+
+    tail = df.dropna(subset=[c for c, _ in cols], how="all").tail(n_rows)
+
+    header = "<tr><th>Data</th>" + "".join(f"<th>{lab}</th>" for _, lab in cols) + "</tr>"
+    rows = []
+    for _, row in tail.iterrows():
+        cells = [f"<td>{row['Data'].strftime('%d/%m/%Y')}</td>"]
+        for c, _ in cols:
+            cells.append(f"<td class='num'>{_fmt(row.get(c), 1)}</td>")
+        rows.append("<tr>" + "".join(cells) + "</tr>")
+
+    rodape = ""
+    if last_dates:
+        partes = " · ".join(
+            f"{k}: {v.strftime('%d/%m')}" if v is not None else f"{k}: —"
+            for k, v in last_dates.items()
+        )
+        rodape = f"<div class='table-subtitle'>Último dado — {partes}</div>"
+
+    return f"""
+    <div class="table-title">Fluxo AFP por dia (mm USD, + compra de CLP)</div>
+    {rodape}
+    <table class="data-table">
+        <thead>{header}</thead>
+        <tbody>{"".join(rows)}</tbody>
+    </table>
+    """

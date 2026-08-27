@@ -16,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
+    build_afp_spot_flow, build_afp_7d_legs, build_afp_weekly_legs,
 )
 from chart_builder import (
     make_line_chart,
@@ -28,8 +29,11 @@ from chart_builder import (
     make_weekly_legs_bars,
     make_weekly_legs_scatter,
     make_offshore_corr_chart,
+    make_afp_7d_bars,
+    make_afp_weekly_bars,
+    make_afp_decomp_bars,
 )
-from table_builder import make_summary_table, make_swap_delta_table
+from table_builder import make_summary_table, make_swap_delta_table, make_afp_legs_table
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -212,6 +216,38 @@ def build_offshore_adj_section(dados):
     return ctx
 
 
+def build_afp_flow_section(dados):
+    """Gera charts e table da aba Fluxo AFP: NDF + Spot.
+
+    Complementa a perna de NDF que o painel ja tinha com a perna spot, construida
+    a partir do fluxo diario por tipo de fundo (A a E) ponderado pela fatia
+    offshore de cada fundo, e com o fluxo spot que o BCCh observa no setor 42.
+    Tudo em convencao compra-de-CLP.
+    """
+    ctx = {}
+    afp_df = build_afp_spot_flow(dados)
+
+    if afp_df.empty:
+        indisp = "<p>Fluxo AFP indisponível: planilhas do R: e cache CSV inacessíveis</p>"
+        return {
+            "afp_7d": indisp, "afp_weekly": indisp,
+            "afp_decomp": indisp, "afp_table": "<p>—</p>",
+        }
+
+    legs = build_afp_7d_legs(afp_df)
+    wk = build_afp_weekly_legs(afp_df)
+
+    ctx["afp_7d"] = make_afp_7d_bars(legs)
+    ctx["afp_weekly"] = make_afp_weekly_bars(
+        wk, "SEMANAL: as três pernas do fluxo dos fundos de pensão",
+    )
+    ctx["afp_decomp"] = make_afp_decomp_bars(
+        wk, "SEMANAL: proxy de spot decomposto — dinheiro novo vs realocação entre fundos",
+    )
+    ctx["afp_table"] = make_afp_legs_table(afp_df, legs.get("last_dates"))
+    return ctx
+
+
 def build_colombia_section(col_data):
     """Gera charts e tables para Colombia."""
     ctx = {}
@@ -274,6 +310,7 @@ def main():
     context["build_timestamp"] = datetime.now(brt).strftime("%Y-%m-%d %H:%M BRT")
 
     context.update(build_fx_section(dados))
+    context.update(build_afp_flow_section(dados))
     context.update(build_offshore_adj_section(dados))
     context.update(build_swap_section(swap_data))
     context.update(build_colombia_section(col_data))

@@ -54,6 +54,8 @@
         .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
         .data-table tr:hover { background: #f8f9fa; }
         .data-table .row-label { font-weight: 500; }
+        .note { margin-top: 14px; font-size: 0.78rem; line-height: 1.5; color: #555;
+                border-top: 1px solid #eee; padding-top: 12px; }
         .swap-table { margin-top: 4px; }
         .table-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; }
         .table-subtitle { font-size: 0.78rem; color: #777; margin-bottom: 8px; }
@@ -83,6 +85,7 @@
 
     <div class="tab-bar">
         <button class="tab-btn active" onclick="showTab('pension')">FUNDOS DE PENSÃO</button>
+        <button class="tab-btn" onclick="showTab('afpflow')">FLUXO AFP: NDF + SPOT</button>
         <button class="tab-btn" onclick="showTab('offshore')">OFFSHORE</button>
         <button class="tab-btn" onclick="showTab('offadj')">OFFSHORE AJUSTADO</button>
         <button class="tab-btn" onclick="showTab('corporate')">CORPORATE</button>
@@ -104,6 +107,35 @@
         <div class="row">
             <div class="panel">{{ pension_delta7 | safe }}</div>
             <div class="panel">{{ pension_delta28 | safe }}</div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- FLUXO AFP: NDF + SPOT -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-afpflow" class="tab-content">
+        <div class="row">
+            <div class="panel panel-wide">{{ afp_7d | safe }}</div>
+            <div class="panel panel-narrow">
+                {{ afp_table | safe }}
+                <div class="note">
+                    <b>Como o spot é construído.</b> O fluxo diário de dinheiro em cada
+                    tipo de fundo (A a E, da Bloomberg: cota × patrimônio por AFP) é
+                    ponderado pela fatia offshore daquele fundo — hoje 84% no A contra
+                    13% no E. Quando o fluxo se concentra nos fundos mais arriscados,
+                    uma fatia maior vira compra de dólar.
+                    <br><br>
+                    <b>Spot observado</b> é o fluxo spot que o BCCh reporta para o setor
+                    42, e serve de âncora: no histórico o proxy tem correlação semanal
+                    de 0,35 com ele e captura cerca de metade do nível.
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ afp_weekly | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ afp_decomp | safe }}</div>
         </div>
     </div>
 
