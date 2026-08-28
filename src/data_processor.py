@@ -321,7 +321,7 @@ def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_net_comparison(afp_wk: pd.DataFrame, off_wk: pd.DataFrame) -> pd.DataFrame:
-    """Junta o net semanal dos fundos de pensao e o do offshore.
+    """Junta o net semanal dos fundos de pensao, o do offshore e a soma dos dois.
 
     As duas ja saem em compra-de-CLP das suas funcoes semanais, entao vao para o
     mesmo eixo sem conversao. Uniao das semanas: as duas series comecam em datas
@@ -333,6 +333,9 @@ def build_net_comparison(afp_wk: pd.DataFrame, off_wk: pd.DataFrame) -> pd.DataF
         off_wk[["Semana", "net_wk"]].rename(columns={"net_wk": "net_offshore"}),
         on="Semana", how="outer",
     ).sort_values("Semana")
+    # min_count=2: o total so existe quando os dois setores existem. Somar com um
+    # deles faltando daria um "total" que na verdade e um setor so.
+    out["net_total"] = out[["net_pension", "net_offshore"]].sum(axis=1, min_count=2)
     return out.dropna(subset=["net_pension", "net_offshore"], how="all").reset_index(drop=True)
 
 

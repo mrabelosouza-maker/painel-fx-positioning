@@ -530,23 +530,28 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
     return _to_html(fig)
 
 
-NET_SECTOR_COLORS = {"pension": "#2563eb", "offshore": "#ea580c"}
+NET_SECTOR_COLORS = {"pension": "#2563eb", "offshore": "#ea580c", "total": "#111827"}
 
 
 def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
-    """Net semanal dos fundos de pensao contra o do offshore, em compra-de-CLP."""
+    """Net semanal dos fundos de pensao, do offshore e a soma, em compra-de-CLP."""
     if df.empty:
         return "<p>Dados indisponíveis</p>"
 
     x_str = _date_strings(df["Semana"])
     fig = go.Figure()
-    for col, name, color in [
-        ("net_pension", "Fundos de pensão (NDF + spot)", NET_SECTOR_COLORS["pension"]),
-        ("net_offshore", "Offshore (NDF + spot)", NET_SECTOR_COLORS["offshore"]),
+    for col, name, color, dash, width in [
+        ("net_pension", "Fundos de pensão (NDF + spot)",
+         NET_SECTOR_COLORS["pension"], "solid", 1.8),
+        ("net_offshore", "Offshore (NDF + spot)",
+         NET_SECTOR_COLORS["offshore"], "solid", 1.8),
+        # A soma vai tracejada e em preto para ler como serie derivada, nao como
+        # um terceiro setor.
+        ("net_total", "Soma dos dois", NET_SECTOR_COLORS["total"], "dash", 2.2),
     ]:
         fig.add_trace(go.Scatter(
             x=x_str, y=df[col], name=name, mode="lines",
-            line=dict(color=color, width=1.8),
+            line=dict(color=color, width=width, dash=dash),
             hovertemplate=f"semana de %{{x}}<br>{name}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
     fig.add_hline(y=0, line_color="black", line_width=0.8)
@@ -558,7 +563,7 @@ def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
     )
-    vals = pd.concat([df["net_pension"], df["net_offshore"]]).dropna()
+    vals = pd.concat([df["net_pension"], df["net_offshore"], df["net_total"]]).dropna()
     lim = vals.abs().max() * 1.15 if len(vals) else 1.0
     fig.update_yaxes(range=[-lim, lim])
     _clp_side_labels(fig, lim, -lim)
