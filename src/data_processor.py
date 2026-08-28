@@ -532,6 +532,40 @@ def build_afp_5d_legs(afp_df: pd.DataFrame) -> dict:
     }
 
 
+def build_afp_levels(afp_df: pd.DataFrame) -> pd.DataFrame:
+    """Os dois niveis rebaseados na primeira data, e o residuo entre eles.
+
+    Ja em compra-de-USD, como o resto da aba.
+
+    O saldo de NDF e um estoque de verdade, mas o spot so existe como fluxo e
+    vira nivel por soma acumulada, cujo zero e a data em que a serie do BCCh
+    comeca — arbitrario. Somar um com o outro cru misturaria uma escala absoluta
+    com uma relativa, entao o NDF tambem entra rebaseado: as duas passam a
+    compartilhar o mesmo zero explicito e o painel le "variacao da posicao desde
+    a ancora", nao "posicao".
+
+    Rebasear e deslocamento aditivo puro, entao trocar a ancora muda o nivel das
+    tres series por uma constante e nao muda a forma de nenhuma.
+
+    `residuo` = ndf + spot, a parte comprada de USD que o forward nao cobriu.
+    Colado no zero = hedge apertado.
+    """
+    if afp_df.empty:
+        return pd.DataFrame()
+
+    d = afp_df.set_index("Data").sort_index()
+    nivel = d["ndf_level"].dropna()
+    if nivel.empty:
+        return pd.DataFrame()
+
+    out = pd.DataFrame({
+        "ndf": nivel - nivel.iloc[0],
+        "spot": d["spot_bcch"].fillna(0.0).cumsum(),
+    })
+    out["residuo"] = out["ndf"] + out["spot"]
+    return out.dropna(how="all").rename_axis("Data").reset_index()
+
+
 def build_afp_rolling_legs(
     afp_df: pd.DataFrame, sessoes: int, media: int = None,
 ) -> pd.DataFrame:

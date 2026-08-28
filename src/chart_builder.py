@@ -717,3 +717,63 @@ def make_sector_weekly_stacked(
     if n > weeks_default:
         fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
     return _to_html(fig)
+
+
+def make_afp_levels_chart(df: pd.DataFrame, title: str, marca: str = None) -> str:
+    """Niveis rebaseados das duas pernas, com o residuo sombreado contra o zero.
+
+    O sombreado e `ndf + spot`, e nao o vao entre as duas linhas: as pernas sao
+    espelhos, entao o vao vale cerca do dobro de cada uma e nao corresponde a
+    posicao nenhuma. O residuo e a parte comprada de USD que o forward nao
+    cobriu — colado no zero quando o hedge esta apertado.
+    """
+    if df.empty:
+        return "<p>Dados indisponíveis</p>"
+
+    x_str = _date_strings(df["Data"])
+    fig = go.Figure()
+
+    # Sombreado primeiro, para as linhas ficarem por cima.
+    fig.add_trace(go.Scatter(
+        x=x_str, y=df["residuo"], name="Resíduo (NDF + spot, não hedgeado)",
+        mode="lines", line=dict(color="#111827", width=1.2),
+        fill="tozeroy", fillcolor="rgba(17,24,39,0.22)",
+        hovertemplate="resíduo: %{y:+,.0f} mm USD<extra></extra>",
+    ))
+    for col, name, color in [
+        ("ndf", "Δ saldo NDF (rebaseado)", AFP_LEG_COLORS["ndf"]),
+        ("spot", "Spot acumulado", AFP_LEG_COLORS["bcch"]),
+    ]:
+        fig.add_trace(go.Scatter(
+            x=x_str, y=df[col], name=name, mode="lines",
+            line=dict(color=color, width=1.8),
+            hovertemplate=f"{name}: %{{y:+,.0f}} mm USD<extra></extra>",
+        ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+
+    if marca:
+        alvo = pd.Timestamp(marca).strftime("%Y-%m-%d")
+        if alvo in x_str:
+            fig.add_vline(
+                x=x_str.index(alvo), line_dash="dot", line_color="#6b7280",
+                line_width=1.5,
+            )
+            fig.add_annotation(
+                x=x_str.index(alvo), y=1, yref="paper", yanchor="bottom",
+                text=pd.Timestamp(marca).strftime("%d/%m/%y"), showarrow=False,
+                font=dict(color="#6b7280", size=10),
+            )
+
+    vals = pd.concat([df["ndf"], df["spot"], df["residuo"]]).dropna()
+    lim = vals.abs().max() * 1.12 if len(vals) else 1.0
+    fig.update_layout(
+        title=title, template="plotly_white", height=460,
+        margin=dict(l=70, r=20, t=60, b=70),
+        yaxis_title="USD million desde a âncora (+ compra de USD)",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+    )
+    fig.update_yaxes(range=[-lim, lim])
+    _usd_side_labels(fig)
+    _apply_category_xaxis(fig)
+    return _to_html(fig)

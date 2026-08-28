@@ -13,14 +13,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import SECTOR_WINDOWS
+from config import SECTOR_WINDOWS, OFFSHORE_ADJ_CUTOVER
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
     build_net_comparison,
     build_all_sectors_flow, build_sector_window_table, build_sector_weekly,
     build_afp_spot_flow, build_afp_5d_legs, build_afp_weekly_legs,
-    build_afp_rolling_legs,
+    build_afp_rolling_legs, build_afp_levels,
 )
 from chart_builder import (
     make_line_chart,
@@ -38,6 +38,7 @@ from chart_builder import (
     make_afp_5d_bars,
     make_afp_daily_bars,
     make_afp_level_line,
+    make_afp_levels_chart,
 )
 from table_builder import (
     make_summary_table, make_swap_delta_table, make_afp_legs_table,
@@ -241,7 +242,7 @@ def build_afp_flow_section(afp_df, wk):
         indisp = "<p>Fluxo AFP indisponível: planilhas do R: e cache CSV inacessíveis</p>"
         return {
             "afp_5d": indisp, "afp_weekly": indisp,
-            "afp_roll5": indisp, "afp_roll21": indisp,
+            "afp_roll5": indisp, "afp_roll21": indisp, "afp_levels": indisp,
             "afp_ndf_level": indisp, "afp_spot_daily": indisp,
             "afp_net_daily": indisp,
             "afp_table": "<p>—</p>",
@@ -266,6 +267,14 @@ def build_afp_flow_section(afp_df, wk):
         build_afp_rolling_legs(afp_df, 21),
         "ROLANTE: delta de 21 pregões — empilhado",
         weeks_default=120, stacked=True, usd=True, date_col="Data",
+    )
+    # Os dois niveis na mesma base, com o residuo sombreado: e a leitura de
+    # estoque contra estoque do hedge, que a razao removida tentava dar por
+    # divisao e nao conseguia.
+    ctx["afp_levels"] = make_afp_levels_chart(
+        build_afp_levels(afp_df),
+        "NÍVEIS REBASEADOS: Δ saldo NDF vs spot acumulado — sombreado = resíduo",
+        marca=OFFSHORE_ADJ_CUTOVER,
     )
     ctx["afp_ndf_level"] = make_afp_level_line(
         afp_df, "NDF: nível do saldo forward do setor 42 (USD million)",
