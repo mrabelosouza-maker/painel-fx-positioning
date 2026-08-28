@@ -3,6 +3,10 @@ import numpy as np
 import pandas as pd
 
 from config import (
+    SECTOR_CHART_LINES,
+    SECTOR_SPOT_SERIES,
+    SECTOR_TABLE_ORDER,
+    SECTOR_WINDOWS,
     CODIGO_CAMBIO,
     DURATIONS,
     OFFSHORE_ADJ_CUTOVER,
@@ -530,3 +534,103 @@ def build_afp_weekly_legs(afp_df: pd.DataFrame) -> pd.DataFrame:
     wk["net_wk"] = wk[["ndf_wk", "bcch_wk"]].sum(axis=1, min_count=1)
 
     return wk.dropna(how="all").rename_axis("Semana").reset_index()
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Todos os setores: NDF + spot
+# ──────────────────────────────────────────────────────────────────────
+# Mesma convencao das outras abas: acima de zero = compra de CLP. As duas series
+# do BCCh vem na otica do banco residente, que ja e essa convencao, entao entram
+# sem inverter sinal. NDF e nivel (a perna e a variacao dele), spot e fluxo.
+def build_all_sectors_flow(dados: pd.DataFrame) -> pd.DataFrame:
+    """Diario, por setor: nivel de NDF, variacao do NDF, spot e net.
+
+    Retorna formato longo, uma linha por (Data, setor), para as tabelas e o
+    grafico agruparem por setor sem precisar decorar nomes de coluna.
+    """
+    nomes = list(SECTOR_SPOT_SERIES)
+    spot_matrix = fetch_bcentral_matrix([SECTOR_SPOT_SERIES[n] for n in nomes])
+    if spot_matrix.empty:
+        return pd.DataFrame()
+
+    spot_matrix["Data"] = pd.to_datetime(
+        spot_matrix["date_str"], dayfirst=True, errors="coerce"
+    )
+    spot = spot_matrix.dropna(subset=["Data"]).set_index("Data").sort_index()
+    spot = spot[[f"V{i}" for i in range(len(nomes))]]
+    spot.columns = nomes
+
+    ndf = dados.set_index("Data").sort_index()
+
+    partes = []
+    for nome in nomes:
+        if nome not in ndf.columns:
+            logger.warning("Setor %s sem coluna de NDF, pulando", nome)
+            continue
+        nivel = ndf[nome].dropna()
+        # Variacao dia a dia do saldo: somar a janela devolve a variacao de ponta
+        # a ponta, do mesmo jeito que as outras abas fazem.
+        parte = pd.DataFrame({
+            "ndf_level": nivel,
+            "ndf_1d": nivel.diff(),
+            "spot": spot[nome],
+        })
+        parte["net_1d"] = parte[["ndf_1d", "spot"]].sum(axis=1, min_count=1)
+        parte["setor"] = nome
+        partes.append(parte.rename_axis("Data").reset_index())
+
+    if not partes:
+        return pd.DataFrame()
+    return pd.concat(partes, ignore_index=True).sort_values(["setor", "Data"])
+
+
+def build_sector_window_table(
+    long_df: pd.DataFrame, dias: int
+) -> tuple[pd.DataFrame, pd.Timestamp, pd.Timestamp]:
+    """Acumulado de `dias` corridos por setor: NDF, spot e net.
+
+    A janela fecha na ultima data com dado e vale para todos os setores, senao a
+    tabela somaria periodos diferentes e a linha de total nao fecharia.
+    Retorna (tabela indexada por setor, inicio, fim).
+    """
+    if long_df.empty:
+        return pd.DataFrame(), None, None
+
+    fim = long_df.dropna(subset=["net_1d"])["Data"].max()
+    inicio = fim - pd.Timedelta(days=dias)
+    janela = long_df[(long_df["Data"] > inicio) & (long_df["Data"] <= fim)]
+
+    tab = janela.groupby("setor")[["ndf_1d", "spot"]].sum(min_count=1)
+    tab["net"] = tab[["ndf_1d", "spot"]].sum(axis=1, min_count=1)
+    tab = tab.rename(columns={"ndf_1d": "ndf", "spot": "spot"})
+
+    # Nivel de NDF do fim da janela, para a tabela dar o contexto do estoque.
+    nivel = (
+        long_df[long_df["Data"] == fim].set_index("setor")["ndf_level"]
+    )
+    tab["ndf_level"] = nivel
+
+    ordem = [s for s in SECTOR_TABLE_ORDER if s in tab.index]
+    primeira = janela["Data"].min() if len(janela) else fim
+    return tab.loc[ordem], primeira, fim
+
+
+def build_sector_weekly_net(long_df: pd.DataFrame) -> pd.DataFrame:
+    """Net semanal (sexta a sexta) de cada setor, uma coluna por setor.
+
+    So as folhas e o offshore: os agregados sao soma delas e virariam linha
+    duplicada no grafico.
+    """
+    if long_df.empty:
+        return pd.DataFrame()
+
+    d = long_df[long_df["setor"].isin(SECTOR_CHART_LINES)]
+    wk = (
+        d.set_index("Data")
+        .groupby("setor")["net_1d"]
+        .resample("W-FRI")
+        .sum(min_count=1)
+        .unstack("setor")
+    )
+    cols = [c for c in SECTOR_CHART_LINES if c in wk.columns]
+    return wk[cols].dropna(how="all").rename_axis("Semana").reset_index()

@@ -143,3 +143,46 @@ def make_afp_legs_table(
         <tbody>{"".join(rows)}</tbody>
     </table>
     """
+
+
+def make_sector_flow_table(
+    tab: pd.DataFrame, dias: int, inicio, fim,
+) -> str:
+    """Tabela de um horizonte: setor x NDF, spot, net e nivel do saldo.
+
+    As folhas vao indentadas e os agregados em negrito com risco em cima, para a
+    conta ficar visivel na propria tabela: as seis folhas somam Residentes no
+    bancos, e este mais No residentes soma o total.
+    """
+    if tab.empty:
+        return "<p>—</p>"
+
+    from config import SECTOR_AGGREGATES, SECTOR_GRAND_TOTAL
+
+    janela = (
+        f"{pd.Timestamp(inicio).strftime('%d/%m')} a "
+        f"{pd.Timestamp(fim).strftime('%d/%m/%Y')}"
+    )
+    rotulo = {1: "1 DIA", 7: "7 DIAS", 28: "28 DIAS"}.get(dias, f"{dias} DIAS")
+
+    linhas = []
+    for setor, row in tab.iterrows():
+        agg = setor in SECTOR_AGGREGATES
+        nome = "TOTAL (monto vigente neto)" if setor == SECTOR_GRAND_TOTAL else setor
+        cls = " class='row-agg'" if agg else ""
+        recuo = "" if agg else "style='padding-left:22px'"
+        cells = [f"<td {recuo}>{nome}</td>"]
+        for c in ("ndf", "spot", "net", "ndf_level"):
+            cells.append(f"<td class='num'>{_fmt(row.get(c), 0)}</td>")
+        linhas.append(f"<tr{cls}>" + "".join(cells) + "</tr>")
+
+    return f"""
+    <div class="table-title">{rotulo} &mdash; NDF + spot por setor (mm USD, + compra de CLP)</div>
+    <div class="table-subtitle">Janela {janela} &middot; as seis folhas somam Residentes no bancos; este mais No residentes soma o total</div>
+    <table class="data-table">
+        <thead><tr>
+            <th>Setor</th><th>&Delta; NDF</th><th>Spot</th><th>Net</th><th>Saldo NDF</th>
+        </tr></thead>
+        <tbody>{"".join(linhas)}</tbody>
+    </table>
+    """

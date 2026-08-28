@@ -13,10 +13,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
+from config import SECTOR_WINDOWS
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
     build_net_comparison,
+    build_all_sectors_flow, build_sector_window_table, build_sector_weekly_net,
     build_afp_spot_flow, build_afp_7d_legs, build_afp_weekly_legs,
 )
 from chart_builder import (
@@ -29,13 +31,17 @@ from chart_builder import (
     make_colombia_line_chart,
     make_weekly_legs_bars,
     make_net_comparison_chart,
+    make_sector_weekly_lines,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
     make_afp_7d_bars,
     make_afp_daily_bars,
     make_afp_level_line,
 )
-from table_builder import make_summary_table, make_swap_delta_table, make_afp_legs_table
+from table_builder import (
+    make_summary_table, make_swap_delta_table, make_afp_legs_table,
+    make_sector_flow_table,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -261,6 +267,34 @@ def build_afp_flow_section(afp_df, wk):
     return ctx
 
 
+def build_sectors_section(dados):
+    """Gera a aba Todos os Setores: NDF + spot de cada setor, em compra-de-CLP.
+
+    Uma tabela por horizonte (1, 7 e 28 dias) mais o grafico de net semanal por
+    setor. As tabelas fecham por construcao: as seis folhas residentes somam
+    Residentes no bancos, e este mais No residentes soma o monto vigente neto.
+    """
+    ctx = {}
+    long_df = build_all_sectors_flow(dados)
+
+    if long_df.empty:
+        indisp = "<p>Dados por setor indisponíveis</p>"
+        return {
+            "sectors_lines": indisp,
+            **{f"sectors_table_{d}": "<p>—</p>" for d in SECTOR_WINDOWS},
+        }
+
+    for dias in SECTOR_WINDOWS:
+        tab, inicio, fim = build_sector_window_table(long_df, dias)
+        ctx[f"sectors_table_{dias}"] = make_sector_flow_table(tab, dias, inicio, fim)
+
+    ctx["sectors_lines"] = make_sector_weekly_lines(
+        build_sector_weekly_net(long_df),
+        "SEMANAL: net (Δ NDF + spot) por setor",
+    )
+    return ctx
+
+
 def build_colombia_section(col_data):
     """Gera charts e tables para Colombia."""
     ctx = {}
@@ -330,6 +364,7 @@ def main():
     context.update(build_fx_section(dados))
     context.update(build_afp_flow_section(afp_df, afp_wk))
     context.update(build_offshore_adj_section(dados, afp_wk))
+    context.update(build_sectors_section(dados))
     context.update(build_swap_section(swap_data))
     context.update(build_colombia_section(col_data))
 

@@ -54,6 +54,7 @@
         .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
         .data-table tr:hover { background: #f8f9fa; }
         .data-table .row-label { font-weight: 500; }
+        .data-table tr.row-agg td { font-weight: 700; border-top: 2px solid #2c3e50; background: #f4f6f8; }
         .note { margin-top: 14px; font-size: 0.78rem; line-height: 1.5; color: #555;
                 border-top: 1px solid #eee; padding-top: 12px; }
         .swap-table { margin-top: 4px; }
@@ -92,6 +93,7 @@
         <button class="tab-btn" onclick="showTab('banks')">POSIÇÃO DOS BANCOS</button>
         <button class="tab-btn" onclick="showTab('total')">TOTAL VS USDCLP</button>
         <button class="tab-btn" onclick="showTab('pensoff')">FUNDOS + OFFSHORE</button>
+        <button class="tab-btn" onclick="showTab('sectors')">TODOS OS SETORES</button>
         <button class="tab-btn" onclick="showTab('swap')">SWAP CAMARA</button>
         <button class="tab-btn" onclick="showTab('colombia')">SALDOS FWD: USDCOP</button>
     </div>
@@ -228,7 +230,40 @@
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- SWAP CAMARA -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TODOS OS SETORES: NDF + SPOT -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-sectors" class="tab-content">
+        <div class="row">
+            <div class="panel">{{ sectors_lines | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ sectors_table_1 | safe }}</div>
+            <div class="panel">{{ sectors_table_7 | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ sectors_table_28 | safe }}</div>
+            <div class="panel">
+                <div class="note">
+                    <b>Como ler.</b> Todas as pernas na mesma convenção: acima de zero =
+                    compra de CLP, abaixo = venda de CLP. <b>Δ NDF</b> é a variação do
+                    saldo forward na janela; <b>Spot</b> é o fluxo spot acumulado na
+                    janela; <b>Net</b> é a soma das duas. <b>Saldo NDF</b> é o estoque no
+                    fim da janela, para dar o contexto de tamanho.
+                    <br><br>
+                    <b>A hierarquia fecha.</b> Os seis setores indentados somam
+                    <b>Residentes no bancos</b>, e este mais <b>No residentes</b> soma o
+                    <b>total</b> — verificado a cada build, diferença de 0,0. Os agregados
+                    aparecem em negrito e não são setores: não some agregado com folha.
+                    <br><br>
+                    Todas as janelas fecham na mesma data, senão a linha de total não
+                    fecharia. A janela de cada tabela está no subtítulo dela.
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
     <div id="tab-swap" class="tab-content">
         <!-- Delta tables -->
         <div class="swap-tables-row">

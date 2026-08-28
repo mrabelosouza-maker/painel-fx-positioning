@@ -569,3 +569,61 @@ def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
     _clp_side_labels(fig, lim, -lim)
     _apply_category_xaxis(fig, nticks=14)
     return _to_html(fig)
+
+
+# Sete cores distinguiveis para as linhas de setor. O offshore fica no laranja
+# que ele ja tem no comparativo da aba Offshore Ajustado, e os fundos de pensao
+# no azul, para o leitor reconhecer as duas series entre abas.
+SECTOR_LINE_COLORS = {
+    "Fondos de pensiones": "#2563eb",
+    "Companias de seguros": "#059669",
+    "Empresas sector real": "#dc2626",
+    "Corredoras de bolsa": "#7c3aed",
+    "Adm generales de fondos": "#0891b2",
+    "Otros sectores": "#a16207",
+    "No residentes": "#ea580c",
+}
+
+
+def make_sector_weekly_lines(
+    wk: pd.DataFrame, title: str, weeks_default: int = 26,
+) -> str:
+    """Net semanal de cada setor, uma linha por setor, em compra-de-CLP.
+
+    Abre nas ultimas `weeks_default` semanas: com sete linhas cruzando zero, o
+    historico inteiro de uma vez vira emaranhado. Duplo-clique devolve tudo, e
+    clicar na legenda isola um setor.
+    """
+    if wk.empty or len(wk.columns) < 2:
+        return "<p>Dados indisponíveis</p>"
+
+    x_str = _date_strings(wk["Semana"])
+    setores = [c for c in wk.columns if c != "Semana"]
+
+    fig = go.Figure()
+    for col in setores:
+        fig.add_trace(go.Scatter(
+            x=x_str, y=wk[col], name=col, mode="lines",
+            line=dict(color=SECTOR_LINE_COLORS.get(col), width=1.6),
+            hovertemplate=f"{col}: %{{y:+,.0f}} mm USD<extra></extra>",
+        ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+
+    fig.update_layout(
+        title=title, template="plotly_white", height=480,
+        margin=dict(l=60, r=20, t=50, b=80),
+        yaxis_title="USD million (+ compra de CLP)",
+        legend=dict(orientation="h", yanchor="top", y=-0.14, xanchor="left", x=0),
+        hovermode="x unified",
+    )
+    _apply_category_xaxis(fig, nticks=14)
+
+    n = len(x_str)
+    visivel = wk.tail(weeks_default) if n > weeks_default else wk
+    vals = pd.concat([visivel[c] for c in setores]).dropna()
+    lim = vals.abs().max() * 1.20 if len(vals) else 1.0
+    fig.update_yaxes(range=[-lim, lim])
+    _clp_side_labels(fig, lim, -lim)
+    if n > weeks_default:
+        fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
+    return _to_html(fig)

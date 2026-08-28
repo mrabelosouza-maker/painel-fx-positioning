@@ -19,8 +19,8 @@ SERIES_FX = [
     "F099.DER.STO.Z.40.R.42.NET.Z.MMUSD.MLME.Z.Z.0.D",   # Fondos de pensiones
     "F099.DER.STO.Z.40.R.44.NET.Z.MMUSD.MLME.Z.Z.0.D",   # Companias de seguros
     "F099.DER.STO.Z.40.R.50.NET.Z.MMUSD.MLME.Z.Z.0.D",   # Otros sectores
-    "F099.DER.STO.Z.40.R.55A.NET.Z.MMUSD.MLME.Z.Z.0.D",  # Residentes no bancos (usado como proxy para Empresas sector real em algumas versoes)
-    "F099.DER.STO.Z.40.R.63.NET.Z.MMUSD.MLME.Z.Z.0.D",   # Empresas sector real
+    "F099.DER.STO.Z.40.R.55A.NET.Z.MMUSD.MLME.Z.Z.0.D",  # Empresas sector real
+    "F099.DER.STO.Z.40.R.63.NET.Z.MMUSD.MLME.Z.Z.0.D",   # Residentes no bancos (agregado das seis folhas residentes)
     "F099.DER.STO.Z.40.Z.Z.NET.Z.MMUSD.MLME.Z.Z.0.D",    # Monto vigente neto
 ]
 
@@ -151,3 +151,53 @@ SERIES_SPOT_PENSION = "F099.SPT.FLU.Z.40.R.42.NET.Z.MMUSD.MLME.Z.Z.0.D"
 
 # Serie de NDF do setor 42 (nivel, ja em SERIES_FX): positivo = AFP net short USD.
 SERIES_NDF_PENSION_NAME = "Fondos de pensiones"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Todos os setores: NDF + spot
+# ──────────────────────────────────────────────────────────────────────
+# O BCCh publica fluxo spot (SPT.FLU) para os mesmos setores do saldo de NDF.
+# Chave = nome da coluna de NDF em SERIES_NAMES_ALL, valor = serie de spot.
+#
+# Cuidado com R.55A e R.63: a descricao do BCCh e um caminho hierarquico, entao
+# "Empresas sector real | Residentes no bancos, Monto vigente neto" quer dizer
+# que R.55A e a folha e R.63 e o agregado, nao o contrario. Vale nos dois
+# namespaces. A verificacao e somar: as seis folhas tem que dar R.63 exato.
+SECTOR_SPOT_SERIES = {
+    "Fondos de pensiones":     "F099.SPT.FLU.Z.40.R.42.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "Companias de seguros":    "F099.SPT.FLU.Z.40.R.44.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "Empresas sector real":    "F099.SPT.FLU.Z.40.R.55A.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "Corredoras de bolsa":     "F099.SPT.FLU.Z.40.R.39.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "Adm generales de fondos": "F099.SPT.FLU.Z.40.R.38.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "Otros sectores":          "F099.SPT.FLU.Z.40.R.50.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "Residentes no bancos":    "F099.SPT.FLU.Z.40.R.63.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "No residentes":           "F099.SPT.FLU.Z.40.N.NR.NET.Z.MMUSD.MLME.Z.Z.0.D",
+    "Monto vigente neto":      "F099.SPT.FLU.Z.40.Z.Z.NET.Z.MMUSD.MLME.Z.Z.0.D",
+}
+
+# Hierarquia verificada nos dados (diferenca media de 0,03 MM USD): os seis
+# setores residentes somam "Residentes no bancos", e este mais "No residentes"
+# soma "Monto vigente neto". Os agregados nao sao setores: entram na tabela como
+# linha de soma e ficam fora do grafico, senao contam duas vezes.
+SECTOR_LEAVES = [
+    "Fondos de pensiones",
+    "Companias de seguros",
+    "Empresas sector real",
+    "Corredoras de bolsa",
+    "Adm generales de fondos",
+    "Otros sectores",
+]
+SECTOR_RESIDENT_TOTAL = "Residentes no bancos"
+SECTOR_OFFSHORE = "No residentes"
+SECTOR_GRAND_TOTAL = "Monto vigente neto"
+
+# Ordem de exibicao da tabela: folhas residentes, o subtotal, o offshore, o total.
+SECTOR_TABLE_ORDER = (
+    SECTOR_LEAVES + [SECTOR_RESIDENT_TOTAL, SECTOR_OFFSHORE, SECTOR_GRAND_TOTAL]
+)
+SECTOR_AGGREGATES = {SECTOR_RESIDENT_TOTAL, SECTOR_GRAND_TOTAL}
+
+# As linhas do grafico: as folhas mais o offshore. Sem agregados.
+SECTOR_CHART_LINES = SECTOR_LEAVES + [SECTOR_OFFSHORE]
+
+SECTOR_WINDOWS = [1, 7, 28]
