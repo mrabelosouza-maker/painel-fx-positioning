@@ -359,15 +359,21 @@ AFP_LEG_COLORS = {
 }
 
 
-def _clp_side_labels(fig: go.Figure, ymax: float, ymin: float) -> None:
-    """Marca que acima de zero e compra de CLP e abaixo e venda de CLP."""
-    for y, text, color in [
-        (ymax * 0.88, "▲ acima de zero: comprando CLP (vendendo USD)", "green"),
-        (ymin * 0.88, "▼ abaixo de zero: vendendo CLP (comprando USD)", "red"),
+def _clp_side_labels(fig: go.Figure) -> None:
+    """Marca que acima de zero e compra de CLP e abaixo e venda de CLP.
+
+    Ancorado em `yref="paper"`, nao no eixo de dados: assim os rotulos ficam
+    presos ao topo e ao pe do painel e sobrevivem a qualquer zoom manual. Com
+    coordenada de dados eles ficavam parados no y em que foram desenhados e
+    saiam de vista assim que a escala mudava.
+    """
+    for y, anchor, text, color in [
+        (0.97, "top", "▲ acima de zero: comprando CLP (vendendo USD)", "green"),
+        (0.03, "bottom", "▼ abaixo de zero: vendendo CLP (comprando USD)", "red"),
     ]:
         fig.add_annotation(
-            xref="paper", x=0.01, y=y, yref="y", text=text, showarrow=False,
-            font=dict(color=color, size=11), xanchor="left",
+            xref="paper", x=0.01, y=y, yref="paper", text=text, showarrow=False,
+            font=dict(color=color, size=11), xanchor="left", yanchor=anchor,
             bgcolor="rgba(255,255,255,0.75)",
         )
 
@@ -419,7 +425,7 @@ def make_afp_7d_bars(legs: dict) -> str:
         showlegend=False, bargap=0.45,
     )
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig, lim, -lim)
+    _clp_side_labels(fig)
     return _to_html(fig)
 
 
@@ -470,7 +476,7 @@ def make_weekly_legs_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12)
     ).dropna()
     lim = vals.abs().max() * 1.30 if len(vals) else 1.0
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig, lim, -lim)
+    _clp_side_labels(fig)
     if n > weeks_default:
         fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
     return _to_html(fig)
@@ -525,7 +531,7 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
         showlegend=False,
     )
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig, lim, -lim)
+    _clp_side_labels(fig)
     _apply_category_xaxis(fig)
     return _to_html(fig)
 
@@ -568,7 +574,7 @@ def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
     vals = pd.concat([df["net_pension"], df["net_offshore"], df["net_total"]]).dropna()
     lim = vals.abs().max() * 1.15 if len(vals) else 1.0
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig, lim, -lim)
+    _clp_side_labels(fig)
     _apply_category_xaxis(fig, nticks=14)
     return _to_html(fig)
 
@@ -666,7 +672,7 @@ def make_sector_weekly_stacked(
     ) * 1.15
     lim = lim if lim and lim > 0 else 1.0
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig, lim, -lim)
+    _clp_side_labels(fig)
     if n > weeks_default:
         fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
     return _to_html(fig)
