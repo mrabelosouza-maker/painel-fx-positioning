@@ -143,7 +143,7 @@ BBG_TICKER_USDCLP = "CLP Curncy"
 BBG_TICKER_USDCOP = "COP Curncy"
 
 # ──────────────────────────────────────────────────────────────────────
-# Fluxo spot dos fundos de pensao (dados alternativos)
+# Fluxo spot dos fundos de pensao
 # ──────────────────────────────────────────────────────────────────────
 # Fluxo spot observado do setor 42, otica do banco residente:
 # positivo = banco compra USD do AFP = AFP vende USD / compra CLP.
@@ -151,23 +151,3 @@ SERIES_SPOT_PENSION = "F099.SPT.FLU.Z.40.R.42.NET.Z.MMUSD.MLME.Z.Z.0.D"
 
 # Serie de NDF do setor 42 (nivel, ja em SERIES_FX): positivo = AFP net short USD.
 SERIES_NDF_PENSION_NAME = "Fondos de pensiones"
-
-AFP_FUND_TYPES = ["A", "B", "C", "D", "E"]
-
-# Planilhas locais (R:). Nao versionadas: ver AFP_FLOW_CACHE.
-AFP_DIR = r"R:\Macro EMs\Chile\7. Fiscal\DadosPensiones"
-AFP_FLOWS_XLSX = AFP_DIR + r"\DadosDiarios.xlsx"
-AFP_ALLOC_XLSX = AFP_DIR + r"\Fundos de Pensao.xlsx"
-
-# Cache versionado, gravado quando os xlsx sao lidos com sucesso e usado como
-# fonte quando o R: nao esta acessivel (ex.: GitHub Actions).
-AFP_FLOW_CACHE = "data/afp_flow_daily.csv"
-
-# O painel so tem NDF/spot do BCCh a partir de BCENTRAL_FIRSTDATE, entao guardar
-# 2020+ da folga de sobra e mantem o CSV versionado pequeno.
-AFP_HISTORY_START = "2020-01-01"
-
-# Um dia em que os cinco fundos somam menos que isso (MM CLP, ~USD 1 mil) e
-# Bloomberg estagnado, nao ausencia de fluxo. A conta do fluxo deixa residuo de
-# ponto flutuante da ordem de 1e-9, entao a comparacao nao pode ser com zero.
-AFP_STALE_TOL = 1.0

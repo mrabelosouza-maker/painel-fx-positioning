@@ -2,7 +2,6 @@
 import io
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 import pandas as pd
 import requests
@@ -10,12 +9,6 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from config import (
-    AFP_ALLOC_XLSX,
-    AFP_FLOW_CACHE,
-    AFP_FLOWS_XLSX,
-    AFP_FUND_TYPES,
-    AFP_HISTORY_START,
-    AFP_STALE_TOL,
     BCENTRAL_CORE,
     BCENTRAL_FIRSTDATE,
     BCENTRAL_PASS,
@@ -255,131 +248,4 @@ def fetch_colombia_forwards() -> pd.DataFrame:
         return df
     except Exception as e2:
         logger.error("Fallback local tambem falhou: %s", e2)
-        return pd.DataFrame()
-
-
-# ──────────────────────────────────────────────────────────────────────
-# Fundos de pensao: fluxo diario por tipo de fundo e fatia offshore
-# ──────────────────────────────────────────────────────────────────────
-def _afp_flows_from_xlsx() -> pd.DataFrame:
-    """Fluxo diario (dinheiro novo) por tipo de fundo, em MM CLP.
-
-    Le as abas `Fundo A`..`Fundo E` de DadosDiarios.xlsx. Cada aba traz, para as
-    seis AFPs, o valor cuota (colunas E,G,I,K,M,O) e o patrimonio do fundo
-    (F,H,J,L,N,P), ambos da Bloomberg. O fluxo limpo de retorno de cada AFP e
-
-        q_{t-1} * NAV_t / q_t - NAV_{t-1}
-
-    e o fluxo do tipo de fundo e a soma sobre as seis AFPs.
-
-    Reproduz a aba `Consolidado` da propria planilha (diferenca maxima 0,0) mas
-    dois dias mais fresco, porque o `Consolidado` tem range fixo de formulas.
-    """
-    out = {}
-    for fund in AFP_FUND_TYPES:
-        raw = pd.read_excel(
-            AFP_FLOWS_XLSX, sheet_name=f"Fundo {fund}",
-            skiprows=8, usecols="D:P", header=None,
-        )
-        raw.columns = ["Data"] + [f"c{i}" for i in range(12)]
-        raw["Data"] = pd.to_datetime(raw["Data"], errors="coerce")
-        raw = raw.dropna(subset=["Data"]).set_index("Data").sort_index()
-        raw = raw.apply(pd.to_numeric, errors="coerce")
-
-        total = pd.Series(0.0, index=raw.index)
-        has_data = pd.Series(False, index=raw.index)
-        for k in range(6):  # seis AFPs, pares (cuota, patrimonio)
-            quota = raw[f"c{2 * k}"]
-            nav = raw[f"c{2 * k + 1}"]
-            flow = (quota.shift(1) * nav / quota) - nav.shift(1)
-            total = total.add(flow.fillna(0.0))
-            has_data = has_data | flow.notna()
-        out[fund] = total.where(has_data)
-
-    flows = pd.DataFrame(out)
-
-    # Dias em que os cinco fundos nao se movem sao Bloomberg estagnado (cuota e
-    # patrimonio nao atualizaram), nao ausencia de fluxo.
-    stale = flows.abs().max(axis=1).fillna(0) < AFP_STALE_TOL
-    flows = flows[~stale]
-    flows = flows[flows.index >= AFP_HISTORY_START]
-
-    logger.info(
-        "AFP fluxos via xlsx: %d dias, ate %s",
-        len(flows), flows.index.max().date(),
-    )
-    return flows
-
-
-def _afp_weights_from_xlsx() -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fatia offshore e AUM por tipo de fundo, mensal.
-
-    Le o bloco `% Portfolio` das abas `Fundo A`..`Fundo E` de
-    Fundos de Pensao.xlsx. Retorna (fatia offshore total, AUM em MM USD).
-    """
-    weights, aum = {}, {}
-    for fund in AFP_FUND_TYPES:
-        raw = pd.read_excel(
-            AFP_ALLOC_XLSX, sheet_name=f"Fundo {fund}",
-            skiprows=1, usecols="A:P",
-        )
-        raw.columns = [
-            "Data", "n_tot", "n_rv", "n_rf", "off_tot", "off_rv", "off_rf",
-            "total", "_gap", "p_ntot", "p_nrv", "p_nrf", "p_offtot",
-            "p_offrv", "p_offrf", "p_tot",
-        ]
-        raw["Data"] = pd.to_datetime(raw["Data"], errors="coerce")
-        raw = raw.dropna(subset=["Data"]).set_index("Data").sort_index()
-        weights[fund] = pd.to_numeric(raw["p_offtot"], errors="coerce")
-        aum[fund] = pd.to_numeric(raw["total"], errors="coerce")
-
-    w_df = pd.DataFrame(weights).dropna(how="all")
-    aum_df = pd.DataFrame(aum).dropna(how="all")
-    logger.info("AFP pesos offshore via xlsx: ate %s", w_df.index.max().date())
-    return w_df, aum_df
-
-
-def _cache_path() -> Path:
-    return Path(__file__).resolve().parent.parent / AFP_FLOW_CACHE
-
-
-def _write_afp_cache(flows: pd.DataFrame, weights: pd.DataFrame, aum: pd.DataFrame) -> None:
-    """Grava o CSV versionado que serve de fonte quando o R: nao esta acessivel."""
-    wide = flows.add_prefix("flow_")
-    for src, prefix in ((weights, "woff_"), (aum, "aum_")):
-        daily = src.reindex(src.index.union(flows.index)).ffill().reindex(flows.index)
-        wide = wide.join(daily.add_prefix(prefix))
-    path = _cache_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    wide.rename_axis("Data").to_csv(path, float_format="%.6f")
-    logger.info("AFP cache gravado: %s (%d linhas)", path, len(wide))
-
-
-def _read_afp_cache() -> pd.DataFrame:
-    path = _cache_path()
-    df = pd.read_csv(path, parse_dates=["Data"]).set_index("Data").sort_index()
-    logger.info("AFP via cache CSV: %d dias, ate %s", len(df), df.index.max().date())
-    return df
-
-
-def fetch_afp_flows_and_weights() -> pd.DataFrame:
-    """Fluxo diario por tipo de fundo, fatia offshore e AUM, tudo em base diaria.
-
-    Fonte primaria: as planilhas no R:. Quando elas nao estao acessiveis (ex.:
-    GitHub Actions), cai para o CSV versionado gravado pelo ultimo build local.
-    Retorna DataFrame indexado por Data com colunas flow_A..E (MM CLP),
-    woff_A..E (fracao) e aum_A..E (MM USD), ou vazio se nenhuma fonte servir.
-    """
-    try:
-        flows = _afp_flows_from_xlsx()
-        weights, aum = _afp_weights_from_xlsx()
-        _write_afp_cache(flows, weights, aum)
-        return _read_afp_cache()
-    except Exception as e:
-        logger.warning("Planilhas AFP no R: indisponiveis (%s), tentando cache...", e)
-
-    try:
-        return _read_afp_cache()
-    except Exception as e2:
-        logger.error("Cache AFP tambem falhou: %s", e2)
         return pd.DataFrame()

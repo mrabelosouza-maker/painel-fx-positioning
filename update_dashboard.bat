@@ -17,7 +17,7 @@ IF %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-"%GIT%" add docs/index.html data/afp_flow_daily.csv >> "%WD%\update_log.txt" 2>&1
+"%GIT%" add docs/index.html >> "%WD%\update_log.txt" 2>&1
 "%GIT%" diff --staged --quiet
 IF %ERRORLEVEL% NEQ 0 (
     "%GIT%" commit -m "Update dashboard %date:~6,4%-%date:~3,2%-%date:~0,2%" >> "%WD%\update_log.txt" 2>&1

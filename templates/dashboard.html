@@ -119,23 +119,20 @@
             <div class="panel panel-narrow">
                 {{ afp_table | safe }}
                 <div class="note">
-                    <b>Como o spot é construído.</b> O fluxo diário de dinheiro em cada
-                    tipo de fundo (A a E, da Bloomberg: cota × patrimônio por AFP) é
-                    ponderado pela fatia offshore daquele fundo — hoje 84% no A contra
-                    13% no E. Quando o fluxo se concentra nos fundos mais arriscados,
-                    uma fatia maior vira compra de dólar.
+                    <b>As duas pernas.</b> <b>NDF</b> é a variação do saldo forward que o
+                    BCCh publica para o setor 42; <b>spot</b> é o fluxo spot que o BCCh
+                    observa no mesmo setor. As duas na mesma convenção: acima de zero =
+                    compra de CLP.
                     <br><br>
-                    <b>Spot observado</b> é o fluxo spot que o BCCh reporta para o setor
-                    42, e serve de âncora: no histórico o proxy tem correlação semanal
-                    de 0,35 com ele e captura cerca de metade do nível.
+                    As fontes têm defasagem diferente, então a janela de 7 dias fecha na
+                    última data em que as duas existem — impressa no rótulo de cada barra.
+                    Ela pode ser anterior à última data da aba <b>Fundos de Pensão</b>, e
+                    aí o delta de 7 dias do NDF não coincide com o de lá.
                 </div>
             </div>
         </div>
         <div class="row">
             <div class="panel">{{ afp_weekly | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ afp_decomp | safe }}</div>
         </div>
     </div>
 

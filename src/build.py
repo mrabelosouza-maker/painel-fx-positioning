@@ -31,7 +31,6 @@ from chart_builder import (
     make_offshore_corr_chart,
     make_afp_7d_bars,
     make_afp_weekly_bars,
-    make_afp_decomp_bars,
 )
 from table_builder import make_summary_table, make_swap_delta_table, make_afp_legs_table
 
@@ -219,10 +218,8 @@ def build_offshore_adj_section(dados):
 def build_afp_flow_section(dados):
     """Gera charts e table da aba Fluxo AFP: NDF + Spot.
 
-    Complementa a perna de NDF que o painel ja tinha com a perna spot, construida
-    a partir do fluxo diario por tipo de fundo (A a E) ponderado pela fatia
-    offshore de cada fundo, e com o fluxo spot que o BCCh observa no setor 42.
-    Tudo em convencao compra-de-CLP.
+    Complementa a perna de NDF que o painel ja tinha com o fluxo spot que o BCCh
+    observa no setor 42, as duas em convencao compra-de-CLP.
     """
     ctx = {}
     afp_df = build_afp_spot_flow(dados)
@@ -231,7 +228,7 @@ def build_afp_flow_section(dados):
         indisp = "<p>Fluxo AFP indisponível: planilhas do R: e cache CSV inacessíveis</p>"
         return {
             "afp_7d": indisp, "afp_weekly": indisp,
-            "afp_decomp": indisp, "afp_table": "<p>—</p>",
+            "afp_table": "<p>—</p>",
         }
 
     legs = build_afp_7d_legs(afp_df)
@@ -239,10 +236,7 @@ def build_afp_flow_section(dados):
 
     ctx["afp_7d"] = make_afp_7d_bars(legs)
     ctx["afp_weekly"] = make_afp_weekly_bars(
-        wk, "SEMANAL: as três pernas do fluxo dos fundos de pensão",
-    )
-    ctx["afp_decomp"] = make_afp_decomp_bars(
-        wk, "SEMANAL: proxy de spot decomposto — dinheiro novo vs realocação entre fundos",
+        wk, "SEMANAL: as duas pernas do fluxo dos fundos de pensão",
     )
     ctx["afp_table"] = make_afp_legs_table(afp_df, legs.get("last_dates"))
     return ctx

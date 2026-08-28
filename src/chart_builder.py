@@ -472,10 +472,9 @@ def make_colombia_line_chart(
 # ──────────────────────────────────────────────────────────────────────
 # Fluxo AFP: NDF + spot
 # ──────────────────────────────────────────────────────────────────────
-# Cores fixas das tres pernas, usadas em todos os graficos da aba.
+# Cores fixas das duas pernas, usadas em todos os graficos da aba.
 AFP_LEG_COLORS = {
     "ndf": "dodgerblue",
-    "proxy": "darkorange",
     "bcch": "#6b7280",
 }
 
@@ -494,16 +493,19 @@ def _clp_side_labels(fig: go.Figure, ymax: float, ymin: float) -> None:
 
 
 def make_afp_7d_bars(legs: dict) -> str:
-    """Uma barra por perna com o acumulado dos ultimos 7 dias corridos."""
+    """Uma barra por perna com o acumulado dos ultimos 7 dias corridos.
+
+    A janela fecha na ancora comum as duas pernas, que pode ser anterior ao
+    ultimo dado da aba de Fundos de Pensao: por isso a data entra no rotulo.
+    """
     if not legs:
         return "<p>Dados do fluxo AFP indisponíveis</p>"
 
+    ancora = legs["anchor"].strftime("%d/%m")
     items = [
-        ("NDF<br><span style='font-size:11px'>Δ saldo BCCh</span>",
+        (f"NDF<br><span style='font-size:11px'>Δ saldo BCCh até {ancora}</span>",
          legs["ndf"], AFP_LEG_COLORS["ndf"]),
-        ("SPOT (proxy)<br><span style='font-size:11px'>fluxo A–E × alocação</span>",
-         legs["spot_proxy"], AFP_LEG_COLORS["proxy"]),
-        ("SPOT (observado)<br><span style='font-size:11px'>BCCh setor 42</span>",
+        (f"SPOT (observado)<br><span style='font-size:11px'>BCCh setor 42 até {ancora}</span>",
          legs["spot_bcch"], AFP_LEG_COLORS["bcch"]),
     ]
     labels = [i[0] for i in items]
@@ -542,14 +544,13 @@ def make_afp_7d_bars(legs: dict) -> str:
 
 
 def make_afp_weekly_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12) -> str:
-    """Barras agrupadas por semana com as tres pernas, em compra-de-CLP."""
+    """Barras agrupadas por semana com as duas pernas, em compra-de-CLP."""
     if wk.empty:
         return "<p>Dados indisponíveis</p>"
 
     x_str = _date_strings(wk["Semana"])
     series = [
         ("ndf_wk", "NDF (Δ saldo na semana)", AFP_LEG_COLORS["ndf"]),
-        ("proxy_wk", "Spot proxy (dados alternativos)", AFP_LEG_COLORS["proxy"]),
         ("bcch_wk", "Spot observado (BCCh)", AFP_LEG_COLORS["bcch"]),
     ]
 
@@ -578,54 +579,6 @@ def make_afp_weekly_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12) 
     lim = vals.abs().max() * 1.30 if len(vals) else 1.0
     fig.update_yaxes(range=[-lim, lim])
     _clp_side_labels(fig, lim, -lim)
-    if n > weeks_default:
-        fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
-    return _to_html(fig)
-
-
-def make_afp_decomp_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12) -> str:
-    """Decomposicao semanal do proxy: dinheiro novo vs realocacao entre fundos."""
-    if wk.empty:
-        return "<p>Dados indisponíveis</p>"
-
-    x_str = _date_strings(wk["Semana"])
-
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=x_str, y=wk["new_money_wk"], name="Dinheiro novo (contribuição líquida)",
-        marker_color="#0e7490",
-        hovertemplate="semana de %{x}<br>dinheiro novo: %{y:+,.0f} mm USD<extra></extra>",
-    ))
-    fig.add_trace(go.Bar(
-        x=x_str, y=wk["switch_wk"], name="Switch (realocação entre fundos A–E)",
-        marker_color="#f59e0b",
-        hovertemplate="semana de %{x}<br>switch: %{y:+,.0f} mm USD<extra></extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        x=x_str, y=wk["proxy_wk"], name="Total do proxy", mode="markers",
-        marker=dict(color="black", size=6, symbol="diamond"),
-        hovertemplate="semana de %{x}<br>total: %{y:+,.0f} mm USD<extra></extra>",
-    ))
-    fig.add_hline(y=0, line_color="black", line_width=0.8)
-
-    fig.update_layout(
-        title=title, barmode="relative", bargap=0.25,
-        template="plotly_white", height=420,
-        margin=dict(l=60, r=20, t=50, b=70),
-        yaxis_title="USD million (+ compra de CLP)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-    )
-    _apply_category_xaxis(fig, nticks=14)
-
-    n = len(x_str)
-    visivel = wk.tail(weeks_default) if n > weeks_default else wk
-    vals = pd.concat([
-        visivel["new_money_wk"] + visivel["switch_wk"].clip(lower=0),
-        visivel["new_money_wk"] + visivel["switch_wk"].clip(upper=0),
-        visivel["proxy_wk"],
-    ]).dropna()
-    lim = vals.abs().max() * 1.25 if len(vals) else 1.0
-    fig.update_yaxes(range=[-lim, lim])
     if n > weeks_default:
         fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
     return _to_html(fig)

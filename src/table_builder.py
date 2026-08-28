@@ -98,7 +98,7 @@ def make_afp_legs_table(
     last_dates: dict = None,
     n_rows: int = 5,
 ) -> str:
-    """Tabela das tres pernas do fluxo AFP, em compra-de-CLP, mais net e % USDCLP.
+    """Tabela das duas pernas do fluxo AFP, em compra-de-CLP, mais net e % USDCLP.
 
     O rodape traz a ultima data de cada fonte: elas tem defasagem diferente e o
     leitor precisa ver isso antes de comparar as pernas.
@@ -107,14 +107,13 @@ def make_afp_legs_table(
         return "<p>—</p>"
 
     df = afp_df.copy()
-    df["net"] = df[["ndf_1d", "spot_proxy"]].sum(axis=1, min_count=1)
+    df["net"] = df[["ndf_1d", "spot_bcch"]].sum(axis=1, min_count=1)
     df["pct_usdclp"] = 100 * (np.log(df["USDCLP"]) - np.log(df["USDCLP"].shift(1)))
 
     cols = [
         ("ndf_1d", "NDF 1D"),
-        ("spot_proxy", "Spot proxy"),
         ("spot_bcch", "Spot BCCh"),
-        ("net", "Net (NDF+proxy)"),
+        ("net", "Net (NDF+spot)"),
         ("pct_usdclp", "% USDCLP"),
     ]
 
