@@ -415,12 +415,23 @@ def build_colombia_data() -> dict:
 #                  USD a termo, ou seja comprar CLP -> +delta do nivel.
 #   spot observado a serie crua do BCCh e fluxo visto pelo banco residente:
 #                  positivo = banco compra USD do AFP = AFP compra CLP -> +valor.
+# Piso do denominador da razao de hedge, calibrado nos quantis da propria serie:
+# abaixo dele a razao nao carrega informacao, so estoura a escala. |spot| semanal
+# tem percentil 10 em 20 MM USD, e |soma de 13 semanas| tem percentil 10 em 534,
+# entao cada piso corta cerca de um decimo das observacoes.
+AFP_HEDGE_MIN_SPOT_WK = 25.0
+AFP_HEDGE_MIN_SPOT_ROLL = 500.0
+
+# Trimestre movel da linha estrutural da razao de hedge.
+AFP_HEDGE_ROLL_WEEKS = 13
+
+
 def build_afp_spot_flow(dados: pd.DataFrame) -> pd.DataFrame:
     """Monta as duas pernas do fluxo dos fundos de pensao, em compra-de-CLP.
 
     NDF e a variacao do saldo forward do setor 42; spot e o fluxo spot que o
-    BCCh observa no mesmo setor. Retorna DataFrame com Data, as duas pernas ja
-    em compra-de-CLP e USDCLP.
+    BCCh observa no mesmo setor. Retorna DataFrame com Data, o nivel do saldo
+    forward, as duas pernas ja em compra-de-CLP, o net delas e USDCLP.
     """
     # Perna de spot observado pelo BCCh.
     spot_raw = fetch_bcentral_series(SERIES_SPOT_PENSION)
@@ -444,12 +455,17 @@ def build_afp_spot_flow(dados: pd.DataFrame) -> pd.DataFrame:
     idx = ndf.index.union(spot_bcch.index).sort_values()
     idx = idx[idx >= spot_bcch.index.min()]
 
-    return pd.DataFrame({
+    out = pd.DataFrame({
+        "ndf_level": ndf[SERIES_NDF_PENSION_NAME],
         "ndf_1d": ndf["delta_1d"],
         "ndf_7d": ndf["delta_7d"],
         "USDCLP": ndf["USDCLP"],
         "spot_bcch": spot_bcch,
-    }, index=idx).rename_axis("Data").reset_index()
+    }, index=idx)
+    # Mesma regra da coluna Net da tabela (min_count=1), para grafico e tabela
+    # nao discordarem em dia que so uma das pernas publicou.
+    out["net_1d"] = out[["ndf_1d", "spot_bcch"]].sum(axis=1, min_count=1)
+    return out.rename_axis("Data").reset_index()
 
 
 def build_afp_7d_legs(afp_df: pd.DataFrame) -> dict:
@@ -499,4 +515,24 @@ def build_afp_weekly_legs(afp_df: pd.DataFrame) -> pd.DataFrame:
         "ndf_wk": d["ndf_1d"].resample("W-FRI").sum(min_count=1),
         "bcch_wk": d["spot_bcch"].resample("W-FRI").sum(min_count=1),
     })
+    wk["net_wk"] = wk[["ndf_wk", "bcch_wk"]].sum(axis=1, min_count=1)
+
+    # Razao de hedge. O AFP compra USD spot para mandar dinheiro para fora, o
+    # que aqui e perna spot negativa; hedgear e vender esse USD a termo, o que
+    # aumenta o net short e da perna NDF positiva. Hedge = sinais opostos, dai o
+    # sinal de menos: +100% = integralmente hedgeado, negativo = o forward
+    # amplia a aposta em vez de proteger.
+    denom = wk["bcch_wk"].where(wk["bcch_wk"].abs() >= AFP_HEDGE_MIN_SPOT_WK)
+    wk["hedge_wk"] = -wk["ndf_wk"] / denom
+
+    # A linha movel e a razao das somas do trimestre, nao a media das razoes:
+    # denominador grande o bastante para nunca estourar, e absorve o
+    # descasamento de timing entre comprar o dolar e montar o forward.
+    n = AFP_HEDGE_ROLL_WEEKS
+    roll_ndf = wk["ndf_wk"].rolling(n, min_periods=n).sum()
+    roll_spot = wk["bcch_wk"].rolling(n, min_periods=n).sum()
+    wk["hedge_roll"] = -roll_ndf / roll_spot.where(
+        roll_spot.abs() >= AFP_HEDGE_MIN_SPOT_ROLL
+    )
+
     return wk.dropna(how="all").rename_axis("Semana").reset_index()

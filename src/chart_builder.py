@@ -544,7 +544,7 @@ def make_afp_7d_bars(legs: dict) -> str:
 
 
 def make_afp_weekly_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12) -> str:
-    """Barras agrupadas por semana com as duas pernas, em compra-de-CLP."""
+    """Barras agrupadas por semana com as duas pernas e a linha do net."""
     if wk.empty:
         return "<p>Dados indisponíveis</p>"
 
@@ -560,6 +560,12 @@ def make_afp_weekly_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12) 
             x=x_str, y=wk[col], name=name, marker_color=color,
             hovertemplate=f"semana de %{{x}}<br>{name}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
+    fig.add_trace(go.Scatter(
+        x=x_str, y=wk["net_wk"], name="Net (NDF + spot)", mode="lines+markers",
+        line=dict(color="black", width=1.5),
+        marker=dict(color="black", size=5, symbol="diamond"),
+        hovertemplate="semana de %{x}<br>net: %{y:+,.0f} mm USD<extra></extra>",
+    ))
     fig.add_hline(y=0, line_color="black", line_width=0.8)
 
     fig.update_layout(
@@ -575,10 +581,115 @@ def make_afp_weekly_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12) 
     # recentes ficam achatadas. Duplo-clique devolve a serie toda.
     n = len(x_str)
     visivel = wk.tail(weeks_default) if n > weeks_default else wk
-    vals = pd.concat([visivel[c] for c, _, _ in series]).dropna()
+    vals = pd.concat(
+        [visivel[c] for c, _, _ in series] + [visivel["net_wk"]]
+    ).dropna()
     lim = vals.abs().max() * 1.30 if len(vals) else 1.0
     fig.update_yaxes(range=[-lim, lim])
     _clp_side_labels(fig, lim, -lim)
     if n > weeks_default:
         fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
+    return _to_html(fig)
+
+
+def make_afp_level_line(afp_df: pd.DataFrame, title: str) -> str:
+    """Nivel do saldo forward do setor 42, diario.
+
+    Sem os rotulos de compra/venda de CLP: aqui acima de zero significa AFP net
+    short USD, que e estoque e nao fluxo, e reaproveitar o rotulo de fluxo dos
+    outros paineis confundiria. A leitura vai no titulo.
+    """
+    d = afp_df.dropna(subset=["ndf_level"])
+    if d.empty:
+        return "<p>Dados indisponíveis</p>"
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=_date_strings(d["Data"]), y=d["ndf_level"], mode="lines",
+        line=dict(color=AFP_LEG_COLORS["ndf"], width=1.5),
+        hovertemplate="%{x}<br>%{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_color="black", line_width=0.5)
+    fig.update_layout(
+        title=title, template="plotly_white", height=400,
+        margin=dict(l=60, r=20, t=50, b=60),
+        yaxis_title="USD million (+ AFP net short USD)",
+        showlegend=False,
+    )
+    _apply_category_xaxis(fig)
+    return _to_html(fig)
+
+
+def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) -> str:
+    """Fluxo diario de uma perna (ou do net), em compra-de-CLP."""
+    d = afp_df.dropna(subset=[col])
+    if d.empty:
+        return "<p>Dados indisponíveis</p>"
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=_date_strings(d["Data"]), y=d[col], marker_color=color,
+        hovertemplate="%{x}<br>%{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+
+    lim = d[col].abs().max() * 1.25
+    fig.update_layout(
+        title=title, template="plotly_white", height=400,
+        margin=dict(l=60, r=20, t=50, b=60),
+        yaxis_title="USD million (+ compra de CLP)",
+        showlegend=False,
+    )
+    fig.update_yaxes(range=[-lim, lim])
+    _clp_side_labels(fig, lim, -lim)
+    _apply_category_xaxis(fig)
+    return _to_html(fig)
+
+
+def make_afp_hedge_ratio(wk: pd.DataFrame, title: str) -> str:
+    """Fatia do fluxo spot que o forward hedgeia, semana a semana e no trimestre.
+
+    A linha movel e o que se le: as barras semanais estao la para mostrar a
+    dispersao, e em semana de spot pequeno o eixo as corta.
+    """
+    d = wk.dropna(subset=["hedge_wk", "hedge_roll"], how="all")
+    if d.empty:
+        return "<p>Dados indisponíveis</p>"
+
+    x_str = _date_strings(d["Semana"])
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=x_str, y=100 * d["hedge_wk"], name="Semana",
+        marker_color="#d1d5db",
+        hovertemplate="semana de %{x}<br>%{y:+,.0f}%<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x_str, y=100 * d["hedge_roll"], name="Móvel de 13 semanas",
+        mode="lines", line=dict(color="#b45309", width=2.5),
+        hovertemplate="semana de %{x}<br>%{y:+,.0f}%<extra></extra>",
+    ))
+    fig.add_hline(y=100, line_dash="dash", line_color="green", line_width=1)
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+
+    # Uma semana de denominador pequeno achata todo o resto: o eixo vem dos
+    # percentis das barras, mas sempre contendo a linha movel inteira.
+    wkv = (100 * d["hedge_wk"]).dropna()
+    rollv = (100 * d["hedge_roll"]).dropna()
+    lo = min(wkv.quantile(0.05) if len(wkv) else 0, rollv.min() if len(rollv) else 0, -25)
+    hi = max(wkv.quantile(0.95) if len(wkv) else 0, rollv.max() if len(rollv) else 0, 125)
+    pad = 0.10 * (hi - lo)
+
+    fig.update_layout(
+        title=title, template="plotly_white", height=420,
+        margin=dict(l=60, r=20, t=50, b=70),
+        yaxis_title="% do fluxo spot hedgeado pelo NDF",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_yaxes(range=[lo - pad, hi + pad], ticksuffix="%")
+    fig.add_annotation(
+        xref="paper", x=0.01, y=100, yref="y", text="100% = hedge integral",
+        showarrow=False, font=dict(color="green", size=11), xanchor="left",
+        yanchor="bottom", bgcolor="rgba(255,255,255,0.75)",
+    )
+    _apply_category_xaxis(fig, nticks=14)
     return _to_html(fig)

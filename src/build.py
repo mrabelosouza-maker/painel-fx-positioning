@@ -29,7 +29,11 @@ from chart_builder import (
     make_weekly_legs_bars,
     make_weekly_legs_scatter,
     make_offshore_corr_chart,
+    AFP_LEG_COLORS,
     make_afp_7d_bars,
+    make_afp_daily_bars,
+    make_afp_hedge_ratio,
+    make_afp_level_line,
     make_afp_weekly_bars,
 )
 from table_builder import make_summary_table, make_swap_delta_table, make_afp_legs_table
@@ -228,6 +232,8 @@ def build_afp_flow_section(dados):
         indisp = "<p>Fluxo AFP indisponível: planilhas do R: e cache CSV inacessíveis</p>"
         return {
             "afp_7d": indisp, "afp_weekly": indisp,
+            "afp_ndf_level": indisp, "afp_spot_daily": indisp,
+            "afp_net_daily": indisp, "afp_hedge": indisp,
             "afp_table": "<p>—</p>",
         }
 
@@ -237,6 +243,21 @@ def build_afp_flow_section(dados):
     ctx["afp_7d"] = make_afp_7d_bars(legs)
     ctx["afp_weekly"] = make_afp_weekly_bars(
         wk, "SEMANAL: as duas pernas do fluxo dos fundos de pensão",
+    )
+    ctx["afp_ndf_level"] = make_afp_level_line(
+        afp_df, "NDF: nível do saldo forward do setor 42 (USD million)",
+    )
+    ctx["afp_spot_daily"] = make_afp_daily_bars(
+        afp_df, "spot_bcch",
+        "SPOT: fluxo diário observado pelo BCCh (USD million)",
+        AFP_LEG_COLORS["bcch"],
+    )
+    ctx["afp_net_daily"] = make_afp_daily_bars(
+        afp_df, "net_1d",
+        "NET DIÁRIO: Δ NDF + spot (USD million)", "#0f766e",
+    )
+    ctx["afp_hedge"] = make_afp_hedge_ratio(
+        wk, "RAZÃO DE HEDGE: fatia do fluxo spot coberta pelo NDF",
     )
     ctx["afp_table"] = make_afp_legs_table(afp_df, legs.get("last_dates"))
     return ctx
