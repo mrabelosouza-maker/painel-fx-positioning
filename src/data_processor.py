@@ -433,22 +433,30 @@ def build_colombia_data() -> dict:
 # ──────────────────────────────────────────────────────────────────────
 # Fluxo AFP: NDF + spot
 # ──────────────────────────────────────────────────────────────────────
-# Convencao unica desta secao: acima de zero = compra de CLP, abaixo de zero =
-# venda de CLP. Unidade MM USD.
+# Convencao unica desta secao: acima de zero = compra de USD, abaixo de zero =
+# venda de USD. Unidade MM USD. Igual a aba de setores e INVERTIDA em relacao a
+# aba de offshore ajustado, que segue em compra-de-CLP.
 #
 #   NDF            a serie crua do BCCh e o nivel visto pelo banco residente:
 #                  positivo = AFP net short USD. Aumentar o short e vender mais
 #                  USD a termo, ou seja comprar CLP -> +delta do nivel.
 #   spot observado a serie crua do BCCh e fluxo visto pelo banco residente:
-#                  positivo = banco compra USD do AFP = AFP compra CLP -> +valor.
+#                  positivo = banco compra USD do AFP = AFP vende USD -> -valor.
+
+
+# Janela curta da aba: cinco pregoes, nao cinco dias corridos.
+AFP_DELTA_SESSIONS = 5
 
 
 def build_afp_spot_flow(dados: pd.DataFrame) -> pd.DataFrame:
-    """Monta as duas pernas do fluxo dos fundos de pensao, em compra-de-CLP.
+    """Monta as duas pernas do fluxo dos fundos de pensao, em compra-de-USD.
 
     NDF e a variacao do saldo forward do setor 42; spot e o fluxo spot que o
-    BCCh observa no mesmo setor. Retorna DataFrame com Data, o nivel do saldo
-    forward, as duas pernas ja em compra-de-CLP, o net delas e USDCLP.
+    BCCh observa no mesmo setor. As duas series cruas do BCCh vem na otica do
+    banco residente, em que positivo = o AFP compra CLP, entao entram com o
+    sinal invertido. O nivel do saldo tambem inverte, e nao so os fluxos, para a
+    aba inteira ter uma convencao so: o saldo aparece aqui como -33.498 (net
+    short USD) e na aba Fundos de Pensao como +33.498, o sinal cru do BCCh.
     """
     # Perna de spot observado pelo BCCh.
     spot_raw = fetch_bcentral_series(SERIES_SPOT_PENSION)
@@ -456,37 +464,40 @@ def build_afp_spot_flow(dados: pd.DataFrame) -> pd.DataFrame:
     spot_raw = spot_raw.dropna(subset=["Data", "value"])
     if spot_raw.empty:
         return pd.DataFrame()
-    spot_bcch = spot_raw.set_index("Data")["value"]
+    spot_bcch = -spot_raw.set_index("Data")["value"]
 
-    # Perna de NDF: variacao do nivel do BCCh, dias corridos, mesma convencao de
-    # compute_deltas usada nas outras abas do painel.
-    ndf = compute_deltas(
-        dados[["Data", SERIES_NDF_PENSION_NAME, "USDCLP"]].dropna(
-            subset=[SERIES_NDF_PENSION_NAME]
-        ),
-        SERIES_NDF_PENSION_NAME, [1, 7],
-    ).set_index("Data")
+    ndf = dados[["Data", SERIES_NDF_PENSION_NAME, "USDCLP"]].dropna(
+        subset=[SERIES_NDF_PENSION_NAME]
+    ).set_index("Data").sort_index()
+    nivel = -ndf[SERIES_NDF_PENSION_NAME]
+
+    # Delta de 5 PREGOES, nao de 5 dias corridos. A serie so tem dia util, entao
+    # diff(5) anda exatamente cinco sessoes. Com 5 dias corridos a janela seria
+    # erratica: cobriria 3 pregoes na segunda, terca e quarta, 4 na quinta e 5 so
+    # na sexta. (7 dias corridos davam 5 pregoes em 869 dos 1046 dias, mas o
+    # deslocamento por sessao e exato em todos.)
+    idx_ndf = pd.DataFrame({
+        "ndf_level": nivel,
+        "ndf_1d": nivel.diff(),
+        "ndf_5d": nivel.diff(AFP_DELTA_SESSIONS),
+        "USDCLP": ndf["USDCLP"],
+    })
 
     # Indice uniao: as duas fontes tem defasagem diferente e o painel precisa
     # mostrar o dado mais fresco de cada uma, nao truncar as duas na mais atrasada.
-    idx = ndf.index.union(spot_bcch.index).sort_values()
-    idx = idx[idx >= spot_bcch.index.min()]
+    ilist = idx_ndf.index.union(spot_bcch.index).sort_values()
+    ilist = ilist[ilist >= spot_bcch.index.min()]
 
-    out = pd.DataFrame({
-        "ndf_level": ndf[SERIES_NDF_PENSION_NAME],
-        "ndf_1d": ndf["delta_1d"],
-        "ndf_7d": ndf["delta_7d"],
-        "USDCLP": ndf["USDCLP"],
-        "spot_bcch": spot_bcch,
-    }, index=idx)
+    out = idx_ndf.reindex(ilist)
+    out["spot_bcch"] = spot_bcch.reindex(ilist)
     # Mesma regra da coluna Net da tabela (min_count=1), para grafico e tabela
     # nao discordarem em dia que so uma das pernas publicou.
     out["net_1d"] = out[["ndf_1d", "spot_bcch"]].sum(axis=1, min_count=1)
     return out.rename_axis("Data").reset_index()
 
 
-def build_afp_7d_legs(afp_df: pd.DataFrame) -> dict:
-    """Acumulado dos ultimos 7 dias corridos de cada perna.
+def build_afp_5d_legs(afp_df: pd.DataFrame) -> dict:
+    """Acumulado dos ultimos 5 pregoes de cada perna.
 
     A janela termina na ultima data em que as duas pernas existem, porque as
     fontes tem defasagem diferente (o BCCh publica o spot e o saldo de NDF em
@@ -496,32 +507,33 @@ def build_afp_7d_legs(afp_df: pd.DataFrame) -> dict:
     if afp_df.empty:
         return {}
 
-    legs = ["ndf_7d", "spot_bcch"]
+    legs = ["ndf_5d", "spot_bcch"]
     d = afp_df.set_index("Data").sort_index()
 
     common = d[legs].dropna()
     if common.empty:
         return {}
     anchor = common.index.max()
-    start = anchor - pd.Timedelta(days=7)
 
-    window = d.loc[(d.index > start) & (d.index <= anchor)]
+    # As cinco ultimas sessoes ate a ancora. Bate com ndf_5d por construcao: a
+    # variacao de nivel em cinco sessoes e a soma das cinco variacoes diarias.
+    window = d.loc[:anchor].tail(AFP_DELTA_SESSIONS)
     return {
-        # ndf_7d ja e a variacao acumulada em 7 dias corridos: pegar o ponto da
-        # ancora, nao somar, senao conta o mesmo movimento sete vezes.
-        "ndf": d.loc[anchor, "ndf_7d"],
+        # ndf_5d ja e a variacao acumulada nas cinco sessoes: pegar o ponto da
+        # ancora, nao somar, senao conta o mesmo movimento cinco vezes.
+        "ndf": d.loc[anchor, "ndf_5d"],
         "spot_bcch": window["spot_bcch"].sum(),
         "anchor": anchor,
         "start": window.index.min() if len(window) else anchor,
         "last_dates": {
-            "NDF": d["ndf_7d"].last_valid_index(),
+            "NDF": d["ndf_5d"].last_valid_index(),
             "Spot BCCh": d["spot_bcch"].last_valid_index(),
         },
     }
 
 
 def build_afp_weekly_legs(afp_df: pd.DataFrame) -> pd.DataFrame:
-    """Agrega as duas pernas por semana (sexta a sexta), em compra-de-CLP."""
+    """Agrega as duas pernas por semana (sexta a sexta), em compra-de-USD."""
     if afp_df.empty:
         return pd.DataFrame()
 

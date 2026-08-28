@@ -98,7 +98,7 @@ def make_afp_legs_table(
     last_dates: dict = None,
     n_rows: int = 5,
 ) -> str:
-    """Tabela das duas pernas do fluxo AFP, em compra-de-CLP, mais net e % USDCLP.
+    """Tabela das duas pernas do fluxo AFP, em compra-de-USD, mais net e % USDCLP.
 
     O rodape traz a ultima data de cada fonte: elas tem defasagem diferente e o
     leitor precisa ver isso antes de comparar as pernas.
@@ -136,7 +136,7 @@ def make_afp_legs_table(
         rodape = f"<div class='table-subtitle'>Último dado — {partes}</div>"
 
     return f"""
-    <div class="table-title">Fluxo AFP por dia (mm USD, + compra de CLP)</div>
+    <div class="table-title">Fluxo AFP por dia (mm USD, + compra de USD)</div>
     {rodape}
     <table class="data-table">
         <thead>{header}</thead>

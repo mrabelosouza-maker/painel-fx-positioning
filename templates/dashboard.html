@@ -117,19 +117,28 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div id="tab-afpflow" class="tab-content">
         <div class="row">
-            <div class="panel panel-wide">{{ afp_7d | safe }}</div>
+            <div class="panel panel-wide">{{ afp_5d | safe }}</div>
             <div class="panel panel-narrow">
                 {{ afp_table | safe }}
                 <div class="note">
                     <b>As duas pernas.</b> <b>NDF</b> é a variação do saldo forward que o
                     BCCh publica para o setor 42; <b>spot</b> é o fluxo spot que o BCCh
                     observa no mesmo setor. As duas na mesma convenção: acima de zero =
-                    compra de CLP.
+                    <b>compra de USD</b> (venda de CLP).
                     <br><br>
-                    As fontes têm defasagem diferente, então a janela de 7 dias fecha na
-                    última data em que as duas existem — impressa no rótulo de cada barra.
-                    Ela pode ser anterior à última data da aba <b>Fundos de Pensão</b>, e
-                    aí o delta de 7 dias do NDF não coincide com o de lá.
+                    <b>Atenção ao sinal.</b> Esta aba e a de <i>Todos os Setores</i> usam a
+                    ótica do USD; a de <i>Offshore Ajustado</i> segue na de compra de CLP,
+                    com o sinal oposto. Vale também para o nível do saldo: aqui os fundos
+                    de pensão aparecem net short USD, e na aba <b>Fundos de Pensão</b> com
+                    o sinal cru do BCCh, invertido.
+                    <br><br>
+                    <b>Janela de 5 pregões</b>, não de 5 dias corridos: a série só tem dia
+                    útil, então o deslocamento é de exatamente cinco sessões. Com dias
+                    corridos a janela cobriria 3 pregões na segunda e 5 só na sexta.
+                    <br><br>
+                    As fontes têm defasagem diferente, então a janela fecha na última data
+                    em que as duas existem — impressa no rótulo de cada barra. Ela pode ser
+                    anterior à última data da aba <b>Fundos de Pensão</b>.
                 </div>
             </div>
         </div>

@@ -396,8 +396,8 @@ def _usd_side_labels(fig: go.Figure) -> None:
     )
 
 
-def make_afp_7d_bars(legs: dict) -> str:
-    """Uma barra por perna com o acumulado dos ultimos 7 dias corridos.
+def make_afp_5d_bars(legs: dict) -> str:
+    """Uma barra por perna com o acumulado dos ultimos 5 pregoes.
 
     A janela fecha na ancora comum as duas pernas, que pode ser anterior ao
     ultimo dado da aba de Fundos de Pensao: por isso a data entra no rotulo.
@@ -434,7 +434,7 @@ def make_afp_7d_bars(legs: dict) -> str:
     lim = max(abs(v) for v in values) * 1.45 if any(values) else 1.0
     fig.update_layout(
         title=(
-            "FUNDOS DE PENSÃO: 7 DIAS — NDF vs SPOT "
+            "FUNDOS DE PENSÃO: 5 PREGÕES — NDF vs SPOT "
             f"<span style='font-size:13px;color:#666'>({janela})</span>"
         ),
         template="plotly_white", height=460,
@@ -443,15 +443,24 @@ def make_afp_7d_bars(legs: dict) -> str:
         showlegend=False, bargap=0.45,
     )
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig)
+    _usd_side_labels(fig)
     return _to_html(fig)
 
 
-def make_weekly_legs_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12) -> str:
-    """Barras agrupadas por semana com as duas pernas e a linha do net.
+def make_weekly_legs_bars(
+    wk: pd.DataFrame, title: str, weeks_default: int = 12,
+    stacked: bool = False, usd: bool = False,
+) -> str:
+    """Barras por semana com as duas pernas e a linha do net.
 
-    Serve a aba dos fundos de pensao e a do offshore ajustado: as duas funcoes
-    semanais entregam ndf_wk, bcch_wk e net_wk na mesma convencao de compra-de-CLP.
+    Serve as duas abas que tem pernas de NDF e spot, mas elas divergem em duas
+    coisas, daí os parametros:
+
+    - `stacked`: empilhado (aba dos AFPs) ou agrupado (offshore ajustado). No
+      empilhado as barras ficam translucidas, para a linha do net atras nao
+      sumir e para as duas pernas se lerem sobrepostas quando tem sinais iguais.
+    - `usd`: convencao de compra-de-USD (aba dos AFPs) ou de compra-de-CLP
+      (offshore ajustado).
     """
     if wk.empty:
         return "<p>Dados indisponíveis</p>"
@@ -465,7 +474,8 @@ def make_weekly_legs_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12)
     fig = go.Figure()
     for col, name, color in series:
         fig.add_trace(go.Bar(
-            x=x_str, y=wk[col], name=name, marker_color=color,
+            x=x_str, y=wk[col], name=name,
+            marker=dict(color=color, opacity=0.62 if stacked else 1.0),
             hovertemplate=f"semana de %{{x}}<br>{name}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
     fig.add_trace(go.Scatter(
@@ -477,10 +487,12 @@ def make_weekly_legs_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12)
     fig.add_hline(y=0, line_color="black", line_width=0.8)
 
     fig.update_layout(
-        title=title, barmode="group", bargap=0.25, bargroupgap=0.05,
+        title=title,
+        barmode="relative" if stacked else "group",
+        bargap=0.2 if stacked else 0.25, bargroupgap=0.05,
         template="plotly_white", height=440,
         margin=dict(l=60, r=20, t=50, b=70),
-        yaxis_title="USD million (+ compra de CLP)",
+        yaxis_title=f"USD million (+ compra de {'USD' if usd else 'CLP'})",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     _apply_category_xaxis(fig, nticks=14)
@@ -489,12 +501,21 @@ def make_weekly_legs_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12)
     # recentes ficam achatadas. Duplo-clique devolve a serie toda.
     n = len(x_str)
     visivel = wk.tail(weeks_default) if n > weeks_default else wk
-    vals = pd.concat(
-        [visivel[c] for c, _, _ in series] + [visivel["net_wk"]]
-    ).dropna()
-    lim = vals.abs().max() * 1.30 if len(vals) else 1.0
+    if stacked:
+        v = visivel[[c for c, _, _ in series]]
+        lim = max(
+            v.clip(lower=0).sum(axis=1).max(),
+            v.clip(upper=0).sum(axis=1).abs().max(),
+            visivel["net_wk"].abs().max(),
+        ) * 1.20
+    else:
+        vals = pd.concat(
+            [visivel[c] for c, _, _ in series] + [visivel["net_wk"]]
+        ).dropna()
+        lim = vals.abs().max() * 1.30 if len(vals) else 1.0
+    lim = lim if lim and lim > 0 else 1.0
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig)
+    (_usd_side_labels if usd else _clp_side_labels)(fig)
     if n > weeks_default:
         fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
     return _to_html(fig)
@@ -503,8 +524,8 @@ def make_weekly_legs_bars(wk: pd.DataFrame, title: str, weeks_default: int = 12)
 def make_afp_level_line(afp_df: pd.DataFrame, title: str) -> str:
     """Nivel do saldo forward do setor 42, diario.
 
-    Sem os rotulos de compra/venda de CLP: aqui acima de zero significa AFP net
-    short USD, que e estoque e nao fluxo, e reaproveitar o rotulo de fluxo dos
+    Sem os rotulos de compra/venda de USD: aqui acima de zero significa AFP net
+    LONG USD, que e estoque e nao fluxo, e reaproveitar o rotulo de fluxo dos
     outros paineis confundiria. A leitura vai no titulo.
     """
     d = afp_df.dropna(subset=["ndf_level"])
@@ -521,7 +542,7 @@ def make_afp_level_line(afp_df: pd.DataFrame, title: str) -> str:
     fig.update_layout(
         title=title, template="plotly_white", height=400,
         margin=dict(l=60, r=20, t=50, b=60),
-        yaxis_title="USD million (+ AFP net short USD)",
+        yaxis_title="USD million (+ AFP long USD)",
         showlegend=False,
     )
     _apply_category_xaxis(fig)
@@ -529,7 +550,7 @@ def make_afp_level_line(afp_df: pd.DataFrame, title: str) -> str:
 
 
 def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) -> str:
-    """Fluxo diario de uma perna (ou do net), em compra-de-CLP."""
+    """Fluxo diario de uma perna (ou do net), em compra-de-USD."""
     d = afp_df.dropna(subset=[col])
     if d.empty:
         return "<p>Dados indisponíveis</p>"
@@ -545,11 +566,11 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
     fig.update_layout(
         title=title, template="plotly_white", height=400,
         margin=dict(l=60, r=20, t=50, b=60),
-        yaxis_title="USD million (+ compra de CLP)",
+        yaxis_title="USD million (+ compra de USD)",
         showlegend=False,
     )
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig)
+    _usd_side_labels(fig)
     _apply_category_xaxis(fig)
     return _to_html(fig)
 

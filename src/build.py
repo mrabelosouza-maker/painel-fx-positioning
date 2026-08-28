@@ -19,7 +19,7 @@ from data_processor import (
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
     build_net_comparison,
     build_all_sectors_flow, build_sector_window_table, build_sector_weekly,
-    build_afp_spot_flow, build_afp_7d_legs, build_afp_weekly_legs,
+    build_afp_spot_flow, build_afp_5d_legs, build_afp_weekly_legs,
 )
 from chart_builder import (
     make_line_chart,
@@ -34,7 +34,7 @@ from chart_builder import (
     make_sector_weekly_stacked,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
-    make_afp_7d_bars,
+    make_afp_5d_bars,
     make_afp_daily_bars,
     make_afp_level_line,
 )
@@ -233,23 +233,24 @@ def build_afp_flow_section(afp_df, wk):
     """Gera charts e table da aba Fluxo AFP: NDF + Spot.
 
     Complementa a perna de NDF que o painel ja tinha com o fluxo spot que o BCCh
-    observa no setor 42, as duas em convencao compra-de-CLP.
+    observa no setor 42, as duas em convencao compra-de-USD.
     """
     ctx = {}
     if afp_df.empty:
         indisp = "<p>Fluxo AFP indisponível: planilhas do R: e cache CSV inacessíveis</p>"
         return {
-            "afp_7d": indisp, "afp_weekly": indisp,
+            "afp_5d": indisp, "afp_weekly": indisp,
             "afp_ndf_level": indisp, "afp_spot_daily": indisp,
             "afp_net_daily": indisp,
             "afp_table": "<p>—</p>",
         }
 
-    legs = build_afp_7d_legs(afp_df)
+    legs = build_afp_5d_legs(afp_df)
 
-    ctx["afp_7d"] = make_afp_7d_bars(legs)
+    ctx["afp_5d"] = make_afp_5d_bars(legs)
     ctx["afp_weekly"] = make_weekly_legs_bars(
-        wk, "SEMANAL: as duas pernas do fluxo dos fundos de pensão",
+        wk, "SEMANAL: as duas pernas do fluxo dos fundos de pensão — empilhado",
+        stacked=True, usd=True,
     )
     ctx["afp_ndf_level"] = make_afp_level_line(
         afp_df, "NDF: nível do saldo forward do setor 42 (USD million)",
