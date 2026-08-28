@@ -415,17 +415,6 @@ def build_colombia_data() -> dict:
 #                  USD a termo, ou seja comprar CLP -> +delta do nivel.
 #   spot observado a serie crua do BCCh e fluxo visto pelo banco residente:
 #                  positivo = banco compra USD do AFP = AFP compra CLP -> +valor.
-# Piso do denominador da razao de hedge. |spot| semanal tem percentil 10 em 20
-# MM USD, entao 25 corta cerca de um decimo das semanas; abaixo disso a razao nao
-# carrega informacao, so estoura a escala.
-AFP_HEDGE_MIN_SPOT_WK = 25.0
-
-# Piso do denominador acumulado, da ordem de um trimestre de fluxo bruto de spot
-# (a soma de 13 semanas de |spot| tem mediana 2518 MM USD). Ate meados de 2023 o
-# acumulado era menor que isso e trocava de sinal, e a razao ia de -130% a +322%
-# sem significar nada. Com este piso a linha comeca em jun/2023 e daí em diante e
-# continua: o acumulado nunca mais volta a ficar abaixo dele.
-AFP_HEDGE_MIN_SPOT_CUM = 2000.0
 
 
 def build_afp_spot_flow(dados: pd.DataFrame) -> pd.DataFrame:
@@ -518,28 +507,5 @@ def build_afp_weekly_legs(afp_df: pd.DataFrame) -> pd.DataFrame:
         "bcch_wk": d["spot_bcch"].resample("W-FRI").sum(min_count=1),
     })
     wk["net_wk"] = wk[["ndf_wk", "bcch_wk"]].sum(axis=1, min_count=1)
-
-    # Razao de hedge. O AFP compra USD spot para mandar dinheiro para fora, o
-    # que aqui e perna spot negativa; hedgear e vender esse USD a termo, o que
-    # aumenta o net short e da perna NDF positiva. Hedge = sinais opostos, dai o
-    # sinal de menos: +100% = integralmente hedgeado, negativo = o forward
-    # amplia a aposta em vez de proteger.
-    denom = wk["bcch_wk"].where(wk["bcch_wk"].abs() >= AFP_HEDGE_MIN_SPOT_WK)
-    wk["hedge_wk"] = -wk["ndf_wk"] / denom
-
-    # A linha e a razao ACUMULADA desde o inicio da serie, nao uma janela movel.
-    # O numerador e a variacao de um estoque: o saldo forward cobre toda a
-    # carteira offshore (33 bn), e ela se move por conta propria — a carteira se
-    # valoriza, o AFP sobe a fatia hedgeada, renda offshore e reinvestida la
-    # fora. Um trimestre de fluxo spot e da ordem de 1,6 bn, entao basta o
-    # estoque andar 5% para o ΔNDF do trimestre valer 100% do spot. Fatiar em
-    # janelas produzia mais de 100% em 58% dos trimestres, o que tornava a
-    # leitura de "sobre-hedge" sem sentido. No acumulado os dois se comparam na
-    # mesma base e a serie converge para algo interpretavel.
-    cum_ndf = wk["ndf_wk"].fillna(0).cumsum()
-    cum_spot = wk["bcch_wk"].fillna(0).cumsum()
-    wk["hedge_cum"] = -cum_ndf / cum_spot.where(
-        cum_spot.abs() >= AFP_HEDGE_MIN_SPOT_CUM
-    )
 
     return wk.dropna(how="all").rename_axis("Semana").reset_index()

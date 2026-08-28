@@ -32,7 +32,6 @@ from chart_builder import (
     AFP_LEG_COLORS,
     make_afp_7d_bars,
     make_afp_daily_bars,
-    make_afp_hedge_ratio,
     make_afp_level_line,
     make_afp_weekly_bars,
 )
@@ -233,7 +232,7 @@ def build_afp_flow_section(dados):
         return {
             "afp_7d": indisp, "afp_weekly": indisp,
             "afp_ndf_level": indisp, "afp_spot_daily": indisp,
-            "afp_net_daily": indisp, "afp_hedge": indisp,
+            "afp_net_daily": indisp,
             "afp_table": "<p>—</p>",
         }
 
@@ -255,9 +254,6 @@ def build_afp_flow_section(dados):
     ctx["afp_net_daily"] = make_afp_daily_bars(
         afp_df, "net_1d",
         "NET DIÁRIO: Δ NDF + spot (USD million)", "#0f766e",
-    )
-    ctx["afp_hedge"] = make_afp_hedge_ratio(
-        wk, "RAZÃO DE HEDGE: fatia do fluxo spot coberta pelo NDF",
     )
     ctx["afp_table"] = make_afp_legs_table(afp_df, legs.get("last_dates"))
     return ctx
