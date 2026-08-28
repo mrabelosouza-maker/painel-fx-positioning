@@ -20,6 +20,7 @@ from data_processor import (
     build_net_comparison,
     build_all_sectors_flow, build_sector_window_table, build_sector_weekly,
     build_afp_spot_flow, build_afp_5d_legs, build_afp_weekly_legs,
+    build_afp_rolling_legs,
 )
 from chart_builder import (
     make_line_chart,
@@ -240,6 +241,7 @@ def build_afp_flow_section(afp_df, wk):
         indisp = "<p>Fluxo AFP indisponível: planilhas do R: e cache CSV inacessíveis</p>"
         return {
             "afp_5d": indisp, "afp_weekly": indisp,
+            "afp_roll5": indisp, "afp_roll21": indisp,
             "afp_ndf_level": indisp, "afp_spot_daily": indisp,
             "afp_net_daily": indisp,
             "afp_table": "<p>—</p>",
@@ -251,6 +253,19 @@ def build_afp_flow_section(afp_df, wk):
     ctx["afp_weekly"] = make_weekly_legs_bars(
         wk, "SEMANAL: as duas pernas do fluxo dos fundos de pensão — empilhado",
         stacked=True, usd=True,
+    )
+    # Duas versoes rolantes do mesmo painel: a curta suavizada e a de um mes.
+    # Barras consecutivas compartilham dias, entao leem-se como nivel de fluxo,
+    # nao como barras independentes — para isso serve o semanal acima.
+    ctx["afp_roll5"] = make_weekly_legs_bars(
+        build_afp_rolling_legs(afp_df, 5, media=5),
+        "ROLANTE: delta de 5 pregões, média móvel de 5 dias — empilhado",
+        weeks_default=120, stacked=True, usd=True, date_col="Data",
+    )
+    ctx["afp_roll21"] = make_weekly_legs_bars(
+        build_afp_rolling_legs(afp_df, 21),
+        "ROLANTE: delta de 21 pregões — empilhado",
+        weeks_default=120, stacked=True, usd=True, date_col="Data",
     )
     ctx["afp_ndf_level"] = make_afp_level_line(
         afp_df, "NDF: nível do saldo forward do setor 42 (USD million)",

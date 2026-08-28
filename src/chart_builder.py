@@ -449,7 +449,7 @@ def make_afp_5d_bars(legs: dict) -> str:
 
 def make_weekly_legs_bars(
     wk: pd.DataFrame, title: str, weeks_default: int = 12,
-    stacked: bool = False, usd: bool = False,
+    stacked: bool = False, usd: bool = False, date_col: str = "Semana",
 ) -> str:
     """Barras por semana com as duas pernas e a linha do net.
 
@@ -461,11 +461,13 @@ def make_weekly_legs_bars(
       sumir e para as duas pernas se lerem sobrepostas quando tem sinais iguais.
     - `usd`: convencao de compra-de-USD (aba dos AFPs) ou de compra-de-CLP
       (offshore ajustado).
+    - `date_col`: "Semana" para o agregado semanal, "Data" para as versoes
+      diarias rolantes. `weeks_default` passa a contar observacoes, nao semanas.
     """
     if wk.empty:
         return "<p>Dados indisponíveis</p>"
 
-    x_str = _date_strings(wk["Semana"])
+    x_str = _date_strings(wk[date_col])
     series = [
         ("ndf_wk", "NDF (Δ saldo na semana)", AFP_LEG_COLORS["ndf"]),
         ("bcch_wk", "Spot observado (BCCh)", AFP_LEG_COLORS["bcch"]),

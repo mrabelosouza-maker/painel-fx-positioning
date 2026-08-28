@@ -532,6 +532,39 @@ def build_afp_5d_legs(afp_df: pd.DataFrame) -> dict:
     }
 
 
+def build_afp_rolling_legs(
+    afp_df: pd.DataFrame, sessoes: int, media: int = None,
+) -> pd.DataFrame:
+    """Soma movel de `sessoes` pregoes de cada perna, opcionalmente suavizada.
+
+    Versao diaria e rolante do semanal: em vez de fechar a semana na sexta, cada
+    dia carrega a janela que termina nele. Some o mesmo movimento em dias
+    consecutivos, entao le-se como nivel de fluxo e nao como barras
+    independentes — o semanal continua sendo o de barras que nao se sobrepoem.
+
+    Para a perna de NDF a soma das variacoes diarias na janela e exatamente a
+    variacao do nivel na janela, entao "soma movel" e "delta rolante" sao a mesma
+    coisa aqui.
+
+    `media` aplica ainda uma media movel de N dias por cima, para tirar o ruido.
+
+    Devolve os mesmos nomes de coluna do semanal (ndf_wk, bcch_wk, net_wk) para
+    reaproveitar o mesmo grafico.
+    """
+    if afp_df.empty:
+        return pd.DataFrame()
+
+    d = afp_df.set_index("Data").sort_index()
+    out = pd.DataFrame({
+        "ndf_wk": d["ndf_1d"].rolling(sessoes, min_periods=sessoes).sum(),
+        "bcch_wk": d["spot_bcch"].rolling(sessoes, min_periods=sessoes).sum(),
+    })
+    if media:
+        out = out.rolling(media, min_periods=media).mean()
+    out["net_wk"] = out[["ndf_wk", "bcch_wk"]].sum(axis=1, min_count=2)
+    return out.dropna(how="all").rename_axis("Data").reset_index()
+
+
 def build_afp_weekly_legs(afp_df: pd.DataFrame) -> pd.DataFrame:
     """Agrega as duas pernas por semana (sexta a sexta), em compra-de-USD."""
     if afp_df.empty:
