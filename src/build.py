@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import SECTOR_WINDOWS, OFFSHORE_ADJ_CUTOVER
+from config import SECTOR_WINDOWS
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
@@ -271,10 +271,13 @@ def build_afp_flow_section(afp_df, wk):
     # Os dois niveis na mesma base, com o residuo sombreado: e a leitura de
     # estoque contra estoque do hedge, que a razao removida tentava dar por
     # divisao e nao conseguia.
+    # A ancora e o primeiro dia com saldo de NDF; o nivel daquele dia vai no
+    # subtitulo, porque e o tamanho que o rebasement esconde.
+    ancora = afp_df.dropna(subset=["ndf_level"]).iloc[0]
     ctx["afp_levels"] = make_afp_levels_chart(
         build_afp_levels(afp_df),
         "NÍVEIS REBASEADOS: Δ saldo NDF vs spot acumulado — sombreado = resíduo",
-        marca=OFFSHORE_ADJ_CUTOVER,
+        ancora=ancora["Data"], nivel_ancora=ancora["ndf_level"],
     )
     ctx["afp_ndf_level"] = make_afp_level_line(
         afp_df, "NDF: nível do saldo forward do setor 42 (USD million)",
