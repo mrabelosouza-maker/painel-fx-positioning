@@ -302,20 +302,38 @@ def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
 def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
     """Agrega as duas pernas do offshore por semana (sexta a sexta).
 
-    Tudo em convencao long USD, positivo = offshore comprando dolar:
-      spot_wk : soma semanal do fluxo spot liquido
-      dndf_wk : variacao semanal do saldo de NDF
+    Mesma convencao e mesmos nomes de coluna que build_afp_weekly_legs, para os
+    dois setores usarem o mesmo grafico e poderem ser comparados lado a lado:
+    acima de zero = compra de CLP. As series cruas do BCCh vem na otica do banco
+    residente, que ja e essa convencao, entao entram sem inverter sinal.
+
+      ndf_wk  : variacao semanal do saldo de NDF
+      bcch_wk : soma semanal do fluxo spot liquido
       net_wk  : soma das duas = variacao semanal da posicao ajustada
     """
     d = adj_df.set_index("Data").sort_index()
-    ndf_long = -d["No residentes"]   # BCCh reporta pela otica do banco residente
-    spot_long = -d["spot_neto"]
     wk = pd.DataFrame({
-        "spot_wk": spot_long.resample("W-FRI").sum(),
-        "dndf_wk": ndf_long.resample("W-FRI").last().diff(),
+        "ndf_wk": d["No residentes"].resample("W-FRI").last().diff(),
+        "bcch_wk": d["spot_neto"].resample("W-FRI").sum(),
     }).dropna()
-    wk["net_wk"] = wk["spot_wk"] + wk["dndf_wk"]
+    wk["net_wk"] = wk["ndf_wk"] + wk["bcch_wk"]
     return wk.rename_axis("Semana").reset_index()
+
+
+def build_net_comparison(afp_wk: pd.DataFrame, off_wk: pd.DataFrame) -> pd.DataFrame:
+    """Junta o net semanal dos fundos de pensao e o do offshore.
+
+    As duas ja saem em compra-de-CLP das suas funcoes semanais, entao vao para o
+    mesmo eixo sem conversao. Uniao das semanas: as duas series comecam em datas
+    diferentes e cada linha fica com o buraco onde nao tem dado.
+    """
+    if afp_wk.empty or off_wk.empty:
+        return pd.DataFrame()
+    out = afp_wk[["Semana", "net_wk"]].rename(columns={"net_wk": "net_pension"}).merge(
+        off_wk[["Semana", "net_wk"]].rename(columns={"net_wk": "net_offshore"}),
+        on="Semana", how="outer",
+    ).sort_values("Semana")
+    return out.dropna(subset=["net_pension", "net_offshore"], how="all").reset_index(drop=True)
 
 
 def build_offshore_corr(
