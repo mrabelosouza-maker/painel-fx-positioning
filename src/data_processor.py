@@ -4,6 +4,7 @@ import pandas as pd
 
 from config import (
     SECTOR_CHART_LINES,
+    SECTOR_NET_LINE,
     SECTOR_SPOT_SERIES,
     SECTOR_TABLE_ORDER,
     SECTOR_WINDOWS,
@@ -616,10 +617,10 @@ def build_sector_window_table(
 
 
 def build_sector_weekly_net(long_df: pd.DataFrame) -> pd.DataFrame:
-    """Net semanal (sexta a sexta) de cada setor, uma coluna por setor.
+    """Net semanal (sexta a sexta) por setor, mais a linha do total.
 
-    So as folhas e o offshore: os agregados sao soma delas e virariam linha
-    duplicada no grafico.
+    Como setores entram so as folhas e o offshore: os agregados intermediarios
+    sao soma delas e virariam linha duplicada. O total entra como serie propria.
     """
     if long_df.empty:
         return pd.DataFrame()
@@ -633,4 +634,10 @@ def build_sector_weekly_net(long_df: pd.DataFrame) -> pd.DataFrame:
         .unstack("setor")
     )
     cols = [c for c in SECTOR_CHART_LINES if c in wk.columns]
-    return wk[cols].dropna(how="all").rename_axis("Semana").reset_index()
+    wk = wk[cols].copy()
+    # O total sai da soma das proprias linhas do grafico, nao da serie de total
+    # publicada: assim a linha preta e por construcao o que se ve somando as
+    # outras. As duas batem (diferenca 0,00), entao nao se perde nada.
+    # min_count=len(cols): so existe na semana em que todos os setores existem.
+    wk[SECTOR_NET_LINE] = wk.sum(axis=1, min_count=len(cols))
+    return wk.dropna(how="all").rename_axis("Semana").reset_index()

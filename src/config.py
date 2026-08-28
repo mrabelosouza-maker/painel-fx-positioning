@@ -197,7 +197,10 @@ SECTOR_TABLE_ORDER = (
 )
 SECTOR_AGGREGATES = {SECTOR_RESIDENT_TOTAL, SECTOR_GRAND_TOTAL}
 
-# As linhas do grafico: as folhas mais o offshore. Sem agregados.
+# As linhas do grafico: as folhas mais o offshore. Sem agregados intermediarios.
 SECTOR_CHART_LINES = SECTOR_LEAVES + [SECTOR_OFFSHORE]
+
+# O total do mercado, somado das linhas acima e desenhado destacado.
+SECTOR_NET_LINE = "TOTAL (todos os setores)"
 
 SECTOR_WINDOWS = [1, 7, 28]

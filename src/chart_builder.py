@@ -582,6 +582,7 @@ SECTOR_LINE_COLORS = {
     "Adm generales de fondos": "#0891b2",
     "Otros sectores": "#a16207",
     "No residentes": "#ea580c",
+    "TOTAL (todos os setores)": "#111827",
 }
 
 
@@ -602,9 +603,16 @@ def make_sector_weekly_lines(
 
     fig = go.Figure()
     for col in setores:
+        # O total vai preto e tracejado, mais grosso, para ler como soma das
+        # outras e nao como mais um setor.
+        total = col.startswith("TOTAL")
         fig.add_trace(go.Scatter(
             x=x_str, y=wk[col], name=col, mode="lines",
-            line=dict(color=SECTOR_LINE_COLORS.get(col), width=1.6),
+            line=dict(
+                color=SECTOR_LINE_COLORS.get(col),
+                width=2.6 if total else 1.6,
+                dash="dash" if total else "solid",
+            ),
             hovertemplate=f"{col}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
     fig.add_hline(y=0, line_color="black", line_width=0.8)
