@@ -235,7 +235,13 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div id="tab-sectors" class="tab-content">
         <div class="row">
-            <div class="panel">{{ sectors_lines | safe }}</div>
+            <div class="panel">{{ sectors_net | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ sectors_ndf | safe }}</div>
+        </div>
+        <div class="row">
+            <div class="panel">{{ sectors_spot | safe }}</div>
         </div>
         <div class="row">
             <div class="panel">{{ sectors_table_1 | safe }}</div>

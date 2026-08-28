@@ -52,9 +52,11 @@ Diferenca media entre soma das folhas e agregado: 0,00 MM USD.
 
 | Linha | Painel |
 |-------|--------|
-| 1 | Grafico de linhas: net semanal por setor |
-| 2 | Tabela de 1 dia ǀ tabela de 7 dias |
-| 3 | Tabela de 28 dias ǀ nota de como ler |
+| 1 | Empilhado semanal: net por setor |
+| 2 | Empilhado semanal: perna de NDF por setor |
+| 3 | Empilhado semanal: perna de spot por setor |
+| 4 | Tabela de 1 dia ǀ tabela de 7 dias |
+| 5 | Tabela de 28 dias ǀ nota de como ler |
 
 Uma tabela por horizonte em vez de uma tabela larga com grupos de coluna: cabe
 na tela sem rolagem horizontal e da para copiar uma janela inteira para um
@@ -68,9 +70,15 @@ tabela.
 Todas as janelas fecham na **mesma data**, a ultima com dado. Se cada setor
 fechasse na sua, a linha de total nao fecharia.
 
-## Grafico
+## Graficos
 
-Net semanal empilhado, uma barra por setor: as seis folhas mais o offshore. Os
+Sao tres, com o mesmo desenho e saindo da mesma funcao (`build_sector_weekly`,
+que recebe a coluna): net, perna de NDF e perna de spot. Iguais de proposito —
+assim da para comparar barra a barra e ver de onde veio o net da semana, do
+forward ou do spot. Verificado a cada build que a matriz do net e exatamente a
+soma das outras duas, diferenca 0,000000 em 222 semanas por 8 colunas.
+
+Cada um e semanal empilhado, uma barra por setor: as seis folhas mais o offshore. Os
 agregados intermediarios ficam de fora, sao soma das folhas e contariam duas
 vezes.
 

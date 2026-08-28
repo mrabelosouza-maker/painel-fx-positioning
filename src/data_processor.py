@@ -616,11 +616,15 @@ def build_sector_window_table(
     return tab.loc[ordem], primeira, fim
 
 
-def build_sector_weekly_net(long_df: pd.DataFrame) -> pd.DataFrame:
-    """Net semanal (sexta a sexta) por setor, mais a linha do total.
+def build_sector_weekly(long_df: pd.DataFrame, col: str = "net_1d") -> pd.DataFrame:
+    """Agregado semanal (sexta a sexta) de uma perna por setor, mais o total.
+
+    `col` escolhe a perna: "ndf_1d", "spot" ou "net_1d". Os tres graficos
+    empilhados da aba saem desta funcao com a mesma forma, entao o de NDF, o de
+    spot e o de net sao comparaveis barra a barra.
 
     Como setores entram so as folhas e o offshore: os agregados intermediarios
-    sao soma delas e virariam linha duplicada. O total entra como serie propria.
+    sao soma delas e virariam barra duplicada. O total entra como serie propria.
     """
     if long_df.empty:
         return pd.DataFrame()
@@ -628,14 +632,14 @@ def build_sector_weekly_net(long_df: pd.DataFrame) -> pd.DataFrame:
     d = long_df[long_df["setor"].isin(SECTOR_CHART_LINES)]
     wk = (
         d.set_index("Data")
-        .groupby("setor")["net_1d"]
+        .groupby("setor")[col]
         .resample("W-FRI")
         .sum(min_count=1)
         .unstack("setor")
     )
     cols = [c for c in SECTOR_CHART_LINES if c in wk.columns]
     wk = wk[cols].copy()
-    # O total sai da soma das proprias linhas do grafico, nao da serie de total
+    # O total sai da soma das proprias barras do grafico, nao da serie de total
     # publicada: assim a linha preta e por construcao o que se ve somando as
     # outras. As duas batem (diferenca 0,00), entao nao se perde nada.
     # min_count=len(cols): so existe na semana em que todos os setores existem.

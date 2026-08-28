@@ -18,7 +18,7 @@ from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
     build_net_comparison,
-    build_all_sectors_flow, build_sector_window_table, build_sector_weekly_net,
+    build_all_sectors_flow, build_sector_window_table, build_sector_weekly,
     build_afp_spot_flow, build_afp_7d_legs, build_afp_weekly_legs,
 )
 from chart_builder import (
@@ -270,8 +270,8 @@ def build_afp_flow_section(afp_df, wk):
 def build_sectors_section(dados):
     """Gera a aba Todos os Setores: NDF + spot de cada setor, em compra-de-CLP.
 
-    Uma tabela por horizonte (1, 7 e 28 dias) mais o grafico de net semanal por
-    setor. As tabelas fecham por construcao: as seis folhas residentes somam
+    Uma tabela por horizonte (1, 7 e 28 dias) mais tres graficos empilhados
+    semanais: net, a perna de NDF e a perna de spot. As tabelas fecham por construcao: as seis folhas residentes somam
     Residentes no bancos, e este mais No residentes soma o monto vigente neto.
     """
     ctx = {}
@@ -280,7 +280,7 @@ def build_sectors_section(dados):
     if long_df.empty:
         indisp = "<p>Dados por setor indisponíveis</p>"
         return {
-            "sectors_lines": indisp,
+            "sectors_net": indisp, "sectors_ndf": indisp, "sectors_spot": indisp,
             **{f"sectors_table_{d}": "<p>—</p>" for d in SECTOR_WINDOWS},
         }
 
@@ -288,10 +288,17 @@ def build_sectors_section(dados):
         tab, inicio, fim = build_sector_window_table(long_df, dias)
         ctx[f"sectors_table_{dias}"] = make_sector_flow_table(tab, dias, inicio, fim)
 
-    ctx["sectors_lines"] = make_sector_weekly_stacked(
-        build_sector_weekly_net(long_df),
-        "SEMANAL: net (Δ NDF + spot) por setor — empilhado, losango = total",
-    )
+    # Os tres saem da mesma funcao e do mesmo desenho, para dar para comparar
+    # barra a barra: de onde veio o net daquela semana, do forward ou do spot.
+    for chave, col, titulo in [
+        ("sectors_net", "net_1d", "SEMANAL: net (Δ NDF + spot) por setor"),
+        ("sectors_ndf", "ndf_1d", "SEMANAL: Δ NDF por setor"),
+        ("sectors_spot", "spot", "SEMANAL: fluxo spot por setor"),
+    ]:
+        ctx[chave] = make_sector_weekly_stacked(
+            build_sector_weekly(long_df, col),
+            f"{titulo} — empilhado, linha = total",
+        )
     return ctx
 
 
