@@ -540,11 +540,18 @@ def build_afp_weekly_legs(afp_df: pd.DataFrame) -> pd.DataFrame:
 # ──────────────────────────────────────────────────────────────────────
 # Todos os setores: NDF + spot
 # ──────────────────────────────────────────────────────────────────────
-# Mesma convencao das outras abas: acima de zero = compra de CLP. As duas series
-# do BCCh vem na otica do banco residente, que ja e essa convencao, entao entram
-# sem inverter sinal. NDF e nivel (a perna e a variacao dele), spot e fluxo.
+# ATENCAO: esta aba usa a convencao INVERTIDA em relacao as outras. Aqui acima de
+# zero = compra de USD (venda de CLP); nas abas de fundos de pensao e offshore
+# ajustado, acima de zero = compra de CLP.
+#
+# As series cruas do BCCh vem na otica do banco residente, em que positivo =
+# cliente comprando CLP, entao tudo aqui entra com o sinal invertido. Inverte-se
+# tambem o nivel do saldo, e nao so os fluxos: uma tabela com o fluxo num sinal e
+# o estoque no outro seria pior que a diferenca entre abas, que a nota da aba
+# explica. Logo o saldo de NDF dos fundos de pensao aparece aqui como -33.498
+# (net short USD) e na aba deles como +33.498.
 def build_all_sectors_flow(dados: pd.DataFrame) -> pd.DataFrame:
-    """Diario, por setor: nivel de NDF, variacao do NDF, spot e net.
+    """Diario, por setor: nivel de NDF, variacao do NDF, spot e net, em compra-de-USD.
 
     Retorna formato longo, uma linha por (Data, setor), para as tabelas e o
     grafico agruparem por setor sem precisar decorar nomes de coluna.
@@ -572,9 +579,9 @@ def build_all_sectors_flow(dados: pd.DataFrame) -> pd.DataFrame:
         # Variacao dia a dia do saldo: somar a janela devolve a variacao de ponta
         # a ponta, do mesmo jeito que as outras abas fazem.
         parte = pd.DataFrame({
-            "ndf_level": nivel,
-            "ndf_1d": nivel.diff(),
-            "spot": spot[nome],
+            "ndf_level": -nivel,
+            "ndf_1d": -nivel.diff(),
+            "spot": -spot[nome],
         })
         parte["net_1d"] = parte[["ndf_1d", "spot"]].sum(axis=1, min_count=1)
         parte["setor"] = nome

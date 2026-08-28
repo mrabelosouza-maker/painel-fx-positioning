@@ -148,7 +148,7 @@ def make_afp_legs_table(
 def make_sector_flow_table(
     tab: pd.DataFrame, dias: int, inicio, fim,
 ) -> str:
-    """Tabela de um horizonte: setor x NDF, spot, net e nivel do saldo.
+    """Tabela de um horizonte: setor x NDF, spot, net e nivel do saldo, em compra-de-USD.
 
     As folhas vao indentadas e os agregados em negrito com risco em cima, para a
     conta ficar visivel na propria tabela: as seis folhas somam Residentes no
@@ -177,7 +177,7 @@ def make_sector_flow_table(
         linhas.append(f"<tr{cls}>" + "".join(cells) + "</tr>")
 
     return f"""
-    <div class="table-title">{rotulo} &mdash; NDF + spot por setor (mm USD, + compra de CLP)</div>
+    <div class="table-title">{rotulo} &mdash; NDF + spot por setor (mm USD, + compra de USD)</div>
     <div class="table-subtitle">Janela {janela} &middot; as seis folhas somam Residentes no bancos; este mais No residentes soma o total</div>
     <table class="data-table">
         <thead><tr>

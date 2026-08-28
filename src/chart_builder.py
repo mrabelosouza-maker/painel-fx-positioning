@@ -359,8 +359,8 @@ AFP_LEG_COLORS = {
 }
 
 
-def _clp_side_labels(fig: go.Figure) -> None:
-    """Marca que acima de zero e compra de CLP e abaixo e venda de CLP.
+def _side_labels(fig: go.Figure, topo: str, pe: str) -> None:
+    """Escreve a convencao de sinal no topo e no pe do painel.
 
     Ancorado em `yref="paper"`, nao no eixo de dados: assim os rotulos ficam
     presos ao topo e ao pe do painel e sobrevivem a qualquer zoom manual. Com
@@ -368,14 +368,32 @@ def _clp_side_labels(fig: go.Figure) -> None:
     saiam de vista assim que a escala mudava.
     """
     for y, anchor, text, color in [
-        (0.97, "top", "▲ acima de zero: comprando CLP (vendendo USD)", "green"),
-        (0.03, "bottom", "▼ abaixo de zero: vendendo CLP (comprando USD)", "red"),
+        (0.97, "top", topo, "green"),
+        (0.03, "bottom", pe, "red"),
     ]:
         fig.add_annotation(
             xref="paper", x=0.01, y=y, yref="paper", text=text, showarrow=False,
             font=dict(color=color, size=11), xanchor="left", yanchor=anchor,
             bgcolor="rgba(255,255,255,0.75)",
         )
+
+
+def _clp_side_labels(fig: go.Figure) -> None:
+    """Convencao das abas de fundos de pensao e offshore: + = compra de CLP."""
+    _side_labels(
+        fig,
+        "▲ acima de zero: comprando CLP (vendendo USD)",
+        "▼ abaixo de zero: vendendo CLP (comprando USD)",
+    )
+
+
+def _usd_side_labels(fig: go.Figure) -> None:
+    """Convencao da aba de setores: + = compra de USD. Invertida das outras."""
+    _side_labels(
+        fig,
+        "▲ acima de zero: comprando USD (vendendo CLP)",
+        "▼ abaixo de zero: vendendo USD (comprando CLP)",
+    )
 
 
 def make_afp_7d_bars(legs: dict) -> str:
@@ -606,7 +624,7 @@ SECTOR_LINE_COLORS = {
 def make_sector_weekly_stacked(
     wk: pd.DataFrame, title: str, weeks_default: int = 26,
 ) -> str:
-    """Net semanal empilhado por setor, em compra-de-CLP.
+    """Net semanal empilhado por setor, em compra-de-USD.
 
     Barras empilhadas em vez de linhas: a pergunta da aba e de composicao — quem
     compra e quem vende CLP na semana — e sete linhas cruzando zero nao mostram
@@ -651,7 +669,7 @@ def make_sector_weekly_stacked(
         title=title, barmode="relative", bargap=0.2,
         template="plotly_white", height=560,
         margin=dict(l=60, r=20, t=50, b=170),
-        yaxis_title="USD million (+ compra de CLP)",
+        yaxis_title="USD million (+ compra de USD)",
         # A legenda tem oito entradas e quebra em duas linhas. Empurrada para
         # baixo dos rotulos de data, com margem inferior que cabe as duas coisas.
         legend=dict(orientation="h", yanchor="top", y=-0.30, xanchor="left", x=0),
@@ -672,7 +690,7 @@ def make_sector_weekly_stacked(
     ) * 1.15
     lim = lim if lim and lim > 0 else 1.0
     fig.update_yaxes(range=[-lim, lim])
-    _clp_side_labels(fig)
+    _usd_side_labels(fig)
     if n > weeks_default:
         fig.update_xaxes(range=[n - weeks_default - 0.5, n - 0.5])
     return _to_html(fig)

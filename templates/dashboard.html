@@ -251,11 +251,18 @@
             <div class="panel">{{ sectors_table_28 | safe }}</div>
             <div class="panel">
                 <div class="note">
-                    <b>Como ler.</b> Todas as pernas na mesma convenção: acima de zero =
-                    compra de CLP, abaixo = venda de CLP. <b>Δ NDF</b> é a variação do
-                    saldo forward na janela; <b>Spot</b> é o fluxo spot acumulado na
-                    janela; <b>Net</b> é a soma das duas. <b>Saldo NDF</b> é o estoque no
-                    fim da janela, para dar o contexto de tamanho.
+                    <b>Como ler.</b> Todas as colunas na mesma convenção: acima de zero =
+                    <b>compra de USD</b> (venda de CLP), abaixo = venda de USD.
+                    <b>Δ NDF</b> é a variação do saldo forward na janela; <b>Spot</b> é o
+                    fluxo spot acumulado na janela; <b>Net</b> é a soma das duas.
+                    <b>Saldo NDF</b> é o estoque no fim da janela, para dar o contexto de
+                    tamanho.
+                    <br><br>
+                    <b>Atenção ao sinal.</b> Esta aba usa a convenção <b>invertida</b> em
+                    relação às abas <i>Fluxo AFP</i> e <i>Offshore Ajustado</i>, onde acima
+                    de zero é compra de CLP. Vale também para o saldo: os fundos de pensão
+                    aparecem aqui com saldo negativo (net short USD) e na aba deles com o
+                    sinal cru do BCCh, positivo.
                     <br><br>
                     <b>A hierarquia fecha.</b> Os seis setores indentados somam
                     <b>Residentes no bancos</b>, e este mais <b>No residentes</b> soma o

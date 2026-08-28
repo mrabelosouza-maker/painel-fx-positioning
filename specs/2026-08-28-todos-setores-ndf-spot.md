@@ -100,11 +100,19 @@ setor isolado: numa pilha o alcance e a soma. Nas ultimas 26 semanas isso da
 Abre nas ultimas 26 semanas; duplo-clique devolve o historico todo e clicar na
 legenda isola um setor.
 
-## Convencao
+## Convencao: INVERTIDA em relacao ao resto do painel
 
-Acima de zero = compra de CLP, igual ao resto do painel. As duas series do BCCh
-vem na otica do banco residente, que ja e essa convencao, entao entram sem
-inverter sinal.
+Aqui **acima de zero = compra de USD** (venda de CLP). Nas abas de fundos de
+pensao e de offshore ajustado e o contrario, acima de zero = compra de CLP.
+
+As series cruas do BCCh vem na otica do banco residente, em que positivo =
+cliente comprando CLP, entao tudo nesta aba entra com o sinal invertido.
+
+Inverte-se tambem o **nivel do saldo**, e nao so os fluxos. Uma tabela com o
+fluxo num sinal e o estoque no outro seria pior que a diferenca entre abas, que
+a nota da aba explica. Consequencia visivel: o saldo de NDF dos fundos de pensao
+aparece aqui como -33.498 (net short USD) e na aba deles como +33.498, que e o
+sinal cru do BCCh.
 
 ## Fora de escopo
 
