@@ -586,39 +586,46 @@ SECTOR_LINE_COLORS = {
 }
 
 
-def make_sector_weekly_lines(
+def make_sector_weekly_stacked(
     wk: pd.DataFrame, title: str, weeks_default: int = 26,
 ) -> str:
-    """Net semanal de cada setor, uma linha por setor, em compra-de-CLP.
+    """Net semanal empilhado por setor, em compra-de-CLP.
 
-    Abre nas ultimas `weeks_default` semanas: com sete linhas cruzando zero, o
-    historico inteiro de uma vez vira emaranhado. Duplo-clique devolve tudo, e
-    clicar na legenda isola um setor.
+    Barras empilhadas em vez de linhas: a pergunta da aba e de composicao — quem
+    compra e quem vende CLP na semana — e sete linhas cruzando zero nao mostram
+    isso. Com barmode relative os compradores empilham para cima e os vendedores
+    para baixo.
+
+    O total vai como marcador e nao como barra: numa pilha com sinais dos dois
+    lados a altura liquida nao e visivel, e o ponto marca onde as duas pilhas se
+    encontram.
     """
     if wk.empty or len(wk.columns) < 2:
         return "<p>Dados indisponíveis</p>"
 
     x_str = _date_strings(wk["Semana"])
-    setores = [c for c in wk.columns if c != "Semana"]
+    total_col = next((c for c in wk.columns if c.startswith("TOTAL")), None)
+    setores = [c for c in wk.columns if c != "Semana" and c != total_col]
 
     fig = go.Figure()
     for col in setores:
-        # O total vai preto e tracejado, mais grosso, para ler como soma das
-        # outras e nao como mais um setor.
-        total = col.startswith("TOTAL")
-        fig.add_trace(go.Scatter(
-            x=x_str, y=wk[col], name=col, mode="lines",
-            line=dict(
-                color=SECTOR_LINE_COLORS.get(col),
-                width=2.6 if total else 1.6,
-                dash="dash" if total else "solid",
-            ),
+        fig.add_trace(go.Bar(
+            x=x_str, y=wk[col], name=col,
+            marker_color=SECTOR_LINE_COLORS.get(col),
             hovertemplate=f"{col}: %{{y:+,.0f}} mm USD<extra></extra>",
+        ))
+    if total_col:
+        fig.add_trace(go.Scatter(
+            x=x_str, y=wk[total_col], name=total_col, mode="markers",
+            marker=dict(color="black", size=7, symbol="diamond",
+                        line=dict(color="white", width=1)),
+            hovertemplate=f"{total_col}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
     fig.add_hline(y=0, line_color="black", line_width=0.8)
 
     fig.update_layout(
-        title=title, template="plotly_white", height=480,
+        title=title, barmode="relative", bargap=0.2,
+        template="plotly_white", height=480,
         margin=dict(l=60, r=20, t=50, b=80),
         yaxis_title="USD million (+ compra de CLP)",
         legend=dict(orientation="h", yanchor="top", y=-0.14, xanchor="left", x=0),
@@ -628,8 +635,14 @@ def make_sector_weekly_lines(
 
     n = len(x_str)
     visivel = wk.tail(weeks_default) if n > weeks_default else wk
-    vals = pd.concat([visivel[c] for c in setores]).dropna()
-    lim = vals.abs().max() * 1.20 if len(vals) else 1.0
+    # Numa pilha o alcance e a soma dos positivos e a dos negativos da semana,
+    # nao o maior setor isolado.
+    v = visivel[setores]
+    lim = max(
+        v.clip(lower=0).sum(axis=1).max(),
+        v.clip(upper=0).sum(axis=1).abs().max(),
+    ) * 1.15
+    lim = lim if lim and lim > 0 else 1.0
     fig.update_yaxes(range=[-lim, lim])
     _clp_side_labels(fig, lim, -lim)
     if n > weeks_default:

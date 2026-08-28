@@ -70,12 +70,27 @@ fechasse na sua, a linha de total nao fecharia.
 
 ## Grafico
 
-Net semanal por setor, uma linha para cada uma das seis folhas mais o offshore.
-Os agregados ficam de fora: sao soma das folhas e virariam linha duplicada.
+Net semanal empilhado, uma barra por setor: as seis folhas mais o offshore. Os
+agregados intermediarios ficam de fora, sao soma das folhas e contariam duas
+vezes.
 
-Abre nas ultimas 26 semanas de proposito. Sete linhas cruzando zero em 222
-semanas de uma vez viram emaranhado; duplo-clique devolve o historico todo e
-clicar na legenda isola um setor.
+Empilhado e nao linhas porque a pergunta da aba e de composicao — quem compra e
+quem vende CLP na semana — e sete linhas cruzando zero nao mostram isso. Com
+`barmode="relative"` os compradores empilham para cima e os vendedores para
+baixo.
+
+O total vai como losango preto e nao como barra: numa pilha com sinais dos dois
+lados a altura liquida nao e visivel, e o marcador mostra onde as duas pilhas se
+encontram. Ele sai da soma das proprias barras, nao da serie de total publicada,
+entao e por construcao o que se ve somando o desenho (as duas batem, 0,0000).
+
+O eixo vem da soma dos positivos e da soma dos negativos da semana, nao do maior
+setor isolado: numa pilha o alcance e a soma. Nas ultimas 26 semanas isso da
+4693 para cima e 4919 para baixo, contra um setor isolado que raramente passa de
+2000.
+
+Abre nas ultimas 26 semanas; duplo-clique devolve o historico todo e clicar na
+legenda isola um setor.
 
 ## Convencao
 

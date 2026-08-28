@@ -31,7 +31,7 @@ from chart_builder import (
     make_colombia_line_chart,
     make_weekly_legs_bars,
     make_net_comparison_chart,
-    make_sector_weekly_lines,
+    make_sector_weekly_stacked,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
     make_afp_7d_bars,
@@ -288,9 +288,9 @@ def build_sectors_section(dados):
         tab, inicio, fim = build_sector_window_table(long_df, dias)
         ctx[f"sectors_table_{dias}"] = make_sector_flow_table(tab, dias, inicio, fim)
 
-    ctx["sectors_lines"] = make_sector_weekly_lines(
+    ctx["sectors_lines"] = make_sector_weekly_stacked(
         build_sector_weekly_net(long_df),
-        "SEMANAL: net (Δ NDF + spot) por setor",
+        "SEMANAL: net (Δ NDF + spot) por setor — empilhado, losango = total",
     )
     return ctx
 
