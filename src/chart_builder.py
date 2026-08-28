@@ -530,7 +530,9 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
     return _to_html(fig)
 
 
-NET_SECTOR_COLORS = {"pension": "#2563eb", "offshore": "#ea580c", "total": "#111827"}
+# Mesmas cores que a aba de setores da a esses dois: a cor segue a entidade, para
+# o leitor reconhecer as series entre abas.
+NET_SECTOR_COLORS = {"pension": "#377eb8", "offshore": "#ff7f00", "total": "#111827"}
 
 
 def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
@@ -571,17 +573,26 @@ def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
     return _to_html(fig)
 
 
-# Sete cores distinguiveis para as linhas de setor. O offshore fica no laranja
-# que ele ja tem no comparativo da aba Offshore Ajustado, e os fundos de pensao
-# no azul, para o leitor reconhecer as duas series entre abas.
+# Paleta categorica dos setores: Set1 do ColorBrewer, na ordem em que empilham.
+# A ordem importa tanto quanto as cores — num empilhado so os vizinhos se tocam,
+# entao ela foi escolhida para maximizar a separacao entre pares adjacentes.
+# Validado (dataviz/validate_palette.js, superficie clara): pior par adjacente
+# com dE 17,2 em protanopia e 20,1 na visao normal, sem WARN.
+#
+# Em todos os pares, e nao so os adjacentes, nenhuma paleta de sete matizes
+# passa: o pior par vira marrom x vermelho com dE 13,0. Isso e limite do numero
+# de series, nao desta escolha — testados Okabe-Ito, Tableau10 e varias
+# substituicoes, todos falham igual ou pior. O alivio e o previsto para o caso:
+# as tres tabelas da mesma aba nomeiam cada setor com os seus numeros, entao a
+# identidade nunca depende so da cor.
 SECTOR_LINE_COLORS = {
-    "Fondos de pensiones": "#2563eb",
-    "Companias de seguros": "#059669",
-    "Empresas sector real": "#dc2626",
-    "Corredoras de bolsa": "#7c3aed",
-    "Adm generales de fondos": "#0891b2",
-    "Otros sectores": "#a16207",
-    "No residentes": "#ea580c",
+    "Fondos de pensiones": "#377eb8",      # azul
+    "Companias de seguros": "#4daf4a",     # verde
+    "Empresas sector real": "#984ea3",     # roxo
+    "Corredoras de bolsa": "#e41a1c",      # vermelho
+    "Adm generales de fondos": "#f781bf",  # rosa
+    "Otros sectores": "#a65628",           # marrom
+    "No residentes": "#ff7f00",            # laranja
     "TOTAL (todos os setores)": "#111827",
 }
 
@@ -596,14 +607,15 @@ def make_sector_weekly_stacked(
     isso. Com barmode relative os compradores empilham para cima e os vendedores
     para baixo.
 
-    O total vai como marcador e nao como barra: numa pilha com sinais dos dois
-    lados a altura liquida nao e visivel, e o ponto marca onde as duas pilhas se
-    encontram.
+    O total vai como linha com marcadores e nao como barra: numa pilha com sinais
+    dos dois lados a altura liquida nao e visivel, e a linha liga onde as duas
+    pilhas se encontram em cada semana.
     """
     if wk.empty or len(wk.columns) < 2:
         return "<p>Dados indisponíveis</p>"
 
-    x_str = _date_strings(wk["Semana"])
+    # Data curta: com 26 barras e rotulo -45 graus, "2026-08-28" nao cabe.
+    x_str = wk["Semana"].dt.strftime("%d/%m/%y").tolist()
     total_col = next((c for c in wk.columns if c.startswith("TOTAL")), None)
     setores = [c for c in wk.columns if c != "Semana" and c != total_col]
 
@@ -611,13 +623,19 @@ def make_sector_weekly_stacked(
     for col in setores:
         fig.add_trace(go.Bar(
             x=x_str, y=wk[col], name=col,
-            marker_color=SECTOR_LINE_COLORS.get(col),
+            marker=dict(
+                color=SECTOR_LINE_COLORS.get(col),
+                # Fio branco entre segmentos: separa as fatias sem depender do
+                # contraste entre as cores vizinhas.
+                line=dict(color="white", width=1),
+            ),
             hovertemplate=f"{col}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
     if total_col:
         fig.add_trace(go.Scatter(
-            x=x_str, y=wk[total_col], name=total_col, mode="markers",
-            marker=dict(color="black", size=7, symbol="diamond",
+            x=x_str, y=wk[total_col], name=total_col, mode="lines+markers",
+            line=dict(color="black", width=2),
+            marker=dict(color="black", size=6, symbol="diamond",
                         line=dict(color="white", width=1)),
             hovertemplate=f"{total_col}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
@@ -625,13 +643,17 @@ def make_sector_weekly_stacked(
 
     fig.update_layout(
         title=title, barmode="relative", bargap=0.2,
-        template="plotly_white", height=480,
-        margin=dict(l=60, r=20, t=50, b=80),
+        template="plotly_white", height=560,
+        margin=dict(l=60, r=20, t=50, b=170),
         yaxis_title="USD million (+ compra de CLP)",
-        legend=dict(orientation="h", yanchor="top", y=-0.14, xanchor="left", x=0),
+        # A legenda tem oito entradas e quebra em duas linhas. Empurrada para
+        # baixo dos rotulos de data, com margem inferior que cabe as duas coisas.
+        legend=dict(orientation="h", yanchor="top", y=-0.30, xanchor="left", x=0),
         hovermode="x unified",
     )
-    _apply_category_xaxis(fig, nticks=14)
+    # nticks e nao dtick=1: com o historico todo aberto (222 semanas) forcar um
+    # rotulo por barra vira borrao. O Plotly rareia sozinho conforme o zoom.
+    fig.update_xaxes(type="category", tickangle=-45, nticks=14)
 
     n = len(x_str)
     visivel = wk.tail(weeks_default) if n > weeks_default else wk
