@@ -1,6 +1,7 @@
 """Clientes para buscar dados da API do Banco Central de Chile e fontes colombianas."""
 import io
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
@@ -26,6 +27,11 @@ logger = logging.getLogger(__name__)
 # ──────────────────────────────────────────────────────────────────────
 # Session com retry
 # ──────────────────────────────────────────────────────────────────────
+# O BCCh estrangula requisicoes concorrentes. Ver fetch_bcentral_series.
+BCENTRAL_MAX_TRIES = 5
+BCENTRAL_BACKOFF = 2.0
+
+
 def _make_session() -> requests.Session:
     s = requests.Session()
     retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
@@ -50,9 +56,29 @@ def fetch_bcentral_series(
         f"{core}user={user}&pass={password}&firstdate={firstdate}"
         f"&timeseries={series_code}&function=GetSeries"
     )
-    resp = _session.get(url, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
+    # Sob concorrencia o BCCh devolve HTTP 200 com uma pagina HTML de erro em vez
+    # do JSON. Como o status e 200, o Retry da sessao (que so olha 5xx) nao pega,
+    # e o build inteiro morria num .json(). Retentar aqui, com backoff.
+    data = None
+    for tentativa in range(BCENTRAL_MAX_TRIES):
+        resp = _session.get(url, timeout=60)
+        resp.raise_for_status()
+        try:
+            data = resp.json()
+            break
+        except ValueError:
+            if tentativa == BCENTRAL_MAX_TRIES - 1:
+                raise RuntimeError(
+                    f"BCCh devolveu resposta nao-JSON para {series_code} em "
+                    f"{BCENTRAL_MAX_TRIES} tentativas (throttle): {resp.text[:120]!r}"
+                )
+            espera = BCENTRAL_BACKOFF * 2 ** tentativa
+            logger.warning(
+                "BCCh nao-JSON em %s (tentativa %d), repetindo em %.0fs",
+                series_code, tentativa + 1, espera,
+            )
+            time.sleep(espera)
+
     obs = data.get("Series", {}).get("Obs", [])
     if not obs:
         logger.warning("Serie %s retornou vazia", series_code)
@@ -76,7 +102,7 @@ def fetch_bcentral_matrix(
         idx, code = idx_code
         return idx, fetch_bcentral_series(code, **kwargs)
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         futures = {pool.submit(_fetch, (i, c)): i for i, c in enumerate(series_codes)}
         for fut in as_completed(futures):
             idx, df = fut.result()
