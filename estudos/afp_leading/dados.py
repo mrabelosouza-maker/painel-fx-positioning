@@ -39,6 +39,12 @@ def alinhar(afp: pd.DataFrame, precos: pd.DataFrame) -> pd.DataFrame:
 
     O ffill e no NIVEL DE PRECO, para casar calendario. O fluxo nunca e
     preenchido: dia sem fluxo publicado e linha fora do painel.
+
+    A amostra final e a INTERSECAO de todos os indices (dropna abaixo exige
+    todo mundo presente na linha). Isso e proposital: as ~32 especificacoes
+    do estudo sao comparadas entre si pelo R2, cada uma rodando numa
+    regressao separada, e comparar R2 calculados em amostras diferentes
+    seria invalido. A intersecao e o preco da comparabilidade.
     """
     afp = afp.sort_values("Data").reset_index(drop=True)
     precos = precos.sort_values("Data").reset_index(drop=True)
@@ -49,11 +55,15 @@ def alinhar(afp: pd.DataFrame, precos: pd.DataFrame) -> pd.DataFrame:
 
     for col in cols_indice:
         serie = precos.set_index("Data")[col].dropna()
+        if serie.empty:
+            raise ValueError(
+                f"Coluna de indice '{col}' nao tem nenhum valor nao-nulo"
+            )
         # ffill so propaga para a frente: data do painel anterior ao primeiro
         # fechamento fica NaN, e a linha cai no dropna abaixo.
         nivel = serie.reindex(serie.index.union(datas)).ffill().reindex(datas)
-        out[f"r_{col}"] = np.log(nivel.to_numpy() / np.roll(nivel.to_numpy(), 1))
-        out.loc[0, f"r_{col}"] = np.nan  # sem dia anterior no painel
+        nivel_anterior = pd.Series(nivel).shift(1)  # NaN na 1a posicao, sem wraparound
+        out[f"r_{col}"] = np.log(nivel.to_numpy() / nivel_anterior.to_numpy())
 
     usadas = COLS_FLUXO + [f"r_{c}" for c in cols_indice]
     usadas = [c for c in usadas if c in out.columns]
@@ -75,13 +85,17 @@ def montar_painel(inicio: str = INICIO_PADRAO) -> pd.DataFrame:
                 afp["Data"].min().date(), afp["Data"].max().date())
 
     precos = None
+    contagens = {}
     for nome, ticker in INDICES.items():
         df = fetch_bbg_closing(ticker, nome, start=inicio)
         if df.empty:
             raise RuntimeError(f"Indice {ticker} voltou vazio do Oracle")
+        contagens[nome] = len(df)
         precos = df if precos is None else precos.merge(df, on="Data", how="outer")
 
     painel = alinhar(afp, precos)
+    logger.info("Painel: %d linhas; por indice antes da intersecao: %s",
+                len(painel), contagens)
     logger.info("Painel: %d linhas (%s a %s)", len(painel),
                 painel["Data"].min().date(), painel["Data"].max().date())
     return painel
