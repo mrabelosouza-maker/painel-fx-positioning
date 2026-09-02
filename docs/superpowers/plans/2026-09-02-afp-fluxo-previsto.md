@@ -42,7 +42,8 @@
 ### Task 1: Painel de dados alinhado
 
 **Files:**
-- Create: `estudos/afp_leading/__init__.py`
+- Create: `estudos/__init__.py`, `estudos/afp_leading/__init__.py`
+- Create: `tests/__init__.py`, `tests/afp_leading/__init__.py`
 - Create: `estudos/afp_leading/dados.py`
 - Create: `tests/afp_leading/test_dados.py`
 - Create: `pytest.ini`
@@ -72,8 +73,14 @@ Criar os diretórios e arquivos vazios:
 
 ```bash
 mkdir -p estudos/afp_leading tests/afp_leading
-touch estudos/afp_leading/__init__.py tests/afp_leading/__init__.py
+touch estudos/__init__.py estudos/afp_leading/__init__.py
+touch tests/__init__.py tests/afp_leading/__init__.py
 ```
+
+Os quatro `__init__.py` sao necessarios, nao decorativos: `estudos/__init__.py`
+faz `python -m estudos.afp_leading.rodar` resolver na Task 5, e `tests/__init__.py`
+faz `from tests.afp_leading.test_modelo import painel_sintetico` resolver na
+Task 4.
 
 - [ ] **Step 2: Escrever o teste que falha**
 
@@ -734,9 +741,15 @@ from tests.afp_leading.test_modelo import painel_sintetico
 
 
 def test_r2_oos_zero_quando_modelo_iguala_a_media():
+    """Previsao identica a media expansivel nao ganha nada da referencia.
+
+    Com y = [1,2,3,4] a media expansivel defasada e [nan, 1, 1.5, 2]. A primeira
+    linha nao tem referencia e sai da conta, entao o 99 abaixo e ignorado de
+    proposito — se ele influenciasse o resultado, a referencia estaria sendo
+    zerada em vez de descartada.
+    """
     y = np.array([1.0, 2.0, 3.0, 4.0])
-    # previsao identica a media expansivel -> nao ganha nada da referencia
-    assert r2_oos(y, np.array([1.0, 1.0, 1.5, 2.0])) == pytest.approx(0.0)
+    assert r2_oos(y, np.array([99.0, 1.0, 1.5, 2.0])) == pytest.approx(0.0)
 
 
 def test_r2_oos_positivo_quando_modelo_acerta_mais():
@@ -847,8 +860,14 @@ def r2_oos(realizado: np.ndarray, previsto: np.ndarray) -> float:
     if len(y) < 2:
         return float("nan")
 
+    # A referencia nao existe na primeira observacao: nao ha historia para formar
+    # media. A linha sai das duas somas, em vez de virar zero — zero inflaria o
+    # SSE de referencia e faria o R2 OOS parecer melhor do que e.
     ref = pd.Series(y).expanding().mean().shift(1).to_numpy()
-    ref[0] = 0.0
+    com_ref = ~np.isnan(ref)
+    y, p, ref = y[com_ref], p[com_ref], ref[com_ref]
+    if len(y) < 1:
+        return float("nan")
 
     sse_modelo = np.nansum((y - p) ** 2)
     sse_ref = np.nansum((y - ref) ** 2)
