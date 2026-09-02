@@ -1,0 +1,292 @@
+<body>
+
+<div class="scroll-progress" id="scrollProgress"></div>
+
+<nav class="topnav">
+  <div class="topnav-left">
+    <button class="nav-toggle" id="navToggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Ocultar sumário">&#9776;</button>
+    <span class="wordmark">JGP</span>
+    <span class="divider">&middot;</span>
+    <span class="breadcrumb">Chile &middot; FX Positioning</span>
+  </div>
+  <div class="topnav-right"><span class="pill">BCCh &middot; {{ build_timestamp }}</span></div>
+</nav>
+
+<nav class="tabbar" id="tabs">
+  <button class="tabbtn on" data-tab="pension">Fundos de Pensão</button>
+  <button class="tabbtn" data-tab="afpflow">Fluxo AFP</button>
+  <button class="tabbtn" data-tab="offshore">Offshore</button>
+  <button class="tabbtn" data-tab="offadj">Offshore Ajustado</button>
+  <button class="tabbtn" data-tab="corporate">Corporate</button>
+  <button class="tabbtn" data-tab="banks">Bancos</button>
+  <button class="tabbtn" data-tab="total">Total vs USDCLP</button>
+  <button class="tabbtn" data-tab="pensoff">Fundos + Offshore</button>
+  <button class="tabbtn" data-tab="sectors">Todos os Setores</button>
+  <button class="tabbtn" data-tab="swap">Swap Cámara</button>
+  <button class="tabbtn" data-tab="colombia">Saldos Fwd USDCOP</button>
+</nav>
+
+<div class="page-wrapper">
+  <nav class="sidebar" id="sidebar"><div class="sidebar-eyebrow">Sumário</div></nav>
+
+  <main class="main-content">
+    <header class="page-header fade-up delay-1">
+      <div class="page-eyebrow"><span class="tag">Posicionamento</span></div>
+      <h1 class="page-title">Painel FX Positioning</h1>
+      <p class="lead">Posição em câmbio dos setores no mercado chileno &mdash; saldo de NDF e fluxo spot
+        publicados pelo Banco Central de Chile &mdash; mais a curva de swap cámara e os saldos forward
+        em USDCOP.</p>
+      <dl class="page-meta">
+        <div class="meta-item"><dt>Fonte</dt><dd>BCCh &middot; Banrep &middot; Bloomberg</dd></div>
+        <div class="meta-item"><dt>Atualizado</dt><dd>{{ build_timestamp }}</dd></div>
+        <div class="meta-item"><dt>Macro</dt><dd>JGP Emerging Markets</dd></div>
+      </dl>
+    </header>
+
+    <!-- ══════════════════ FUNDOS DE PENSÃO ══════════════════ -->
+    <div id="tab-pension" class="tab on">
+      <h2>Posição e resumo</h2>
+      <p class="sub">Convenção desta aba: <b>acima de zero = compra de USD</b>, abaixo de zero = venda de USD.
+        A série crua do BCCh vem na ótica do banco residente (positivo = fundo vendendo USD) e entra aqui
+        invertida, para bater com a aba de Fluxo AFP.</p>
+      <div class="grid-wide">
+        <div class="card">{{ pension_line | safe }}</div>
+        <div class="card">{{ pension_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <p class="sub">Janelas em <b>pregões</b>, não em dias corridos: a série só tem dia útil, então o
+        deslocamento é de exatamente 5 e 21 sessões.</p>
+      <div class="grid2">
+        <div class="card">{{ pension_delta5 | safe }}</div>
+        <div class="card">{{ pension_delta21 | safe }}</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ FLUXO AFP: NDF + SPOT ══════════════════ -->
+    <div id="tab-afpflow" class="tab">
+      <h2>Últimos 5 pregões</h2>
+      <div class="grid-wide">
+        <div class="card">{{ afp_5d | safe }}</div>
+        <div class="card">
+          {{ afp_table | safe }}
+          <div class="note">
+            <b>As duas pernas.</b> <b>NDF</b> é a variação do saldo forward que o
+            BCCh publica para o setor 42; <b>spot</b> é o fluxo spot que o BCCh
+            observa no mesmo setor. As duas na mesma convenção: acima de zero =
+            <b>compra de USD</b> (venda de CLP).
+            <br><br>
+            <b>Atenção ao sinal.</b> Esta aba, a de <i>Fundos de Pensão</i> e a de
+            <i>Todos os Setores</i> usam a ótica do USD; a de <i>Offshore Ajustado</i>
+            segue na de compra de CLP, com o sinal oposto.
+            <br><br>
+            <b>Janela de 5 pregões</b>, não de 5 dias corridos: a série só tem dia
+            útil, então o deslocamento é de exatamente cinco sessões. Com dias
+            corridos a janela cobriria 3 pregões na segunda e 5 só na sexta.
+            <br><br>
+            As fontes têm defasagem diferente, então a janela fecha na última data
+            em que as duas existem &mdash; impressa no rótulo de cada barra.
+          </div>
+        </div>
+      </div>
+
+      <h2>Fluxo semanal</h2>
+      <div class="card">{{ afp_weekly | safe }}</div>
+
+      <h2>Janelas rolantes</h2>
+      <div class="card">{{ afp_roll5 | safe }}</div>
+      <div class="card">{{ afp_roll21 | safe }}</div>
+
+      <h2>Níveis acumulados e resíduo</h2>
+      <div class="card">{{ afp_levels | safe }}</div>
+
+      <h2>Pernas diárias</h2>
+      <div class="grid2">
+        <div class="card">{{ afp_ndf_level | safe }}</div>
+        <div class="card">{{ afp_spot_daily | safe }}</div>
+      </div>
+      <div class="card">{{ afp_net_daily | safe }}</div>
+    </div>
+
+    <!-- ══════════════════ OFFSHORE ══════════════════ -->
+    <div id="tab-offshore" class="tab">
+      <h2>Posição e resumo</h2>
+      <p class="sub">Sinal cru do BCCh: acima de zero = compra de CLP (venda de USD).</p>
+      <div class="grid-wide">
+        <div class="card">{{ offshore_line | safe }}</div>
+        <div class="card">{{ offshore_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ offshore_delta7 | safe }}</div>
+        <div class="card">{{ offshore_delta28 | safe }}</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ OFFSHORE AJUSTADO ══════════════════ -->
+    <div id="tab-offadj" class="tab">
+      <h2>Posição ajustada e resumo</h2>
+      <p class="sub">Convenção de <b>compra de CLP</b>: acima de zero = comprando CLP (vendendo USD).
+        Invertida em relação às abas de Fundos de Pensão, Fluxo AFP e Todos os Setores.</p>
+      <div class="grid-wide">
+        <div class="card">{{ offadj_chart | safe }}</div>
+        <div class="card">{{ offadj_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ offadj_delta7 | safe }}</div>
+        <div class="card">{{ offadj_delta28 | safe }}</div>
+      </div>
+
+      <h2>Fluxo semanal por perna</h2>
+      <div class="card">{{ offadj_weekly_bars | safe }}</div>
+
+      <h2>Net do offshore vs net dos fundos</h2>
+      <div class="card">{{ offadj_net_vs_afp | safe }}</div>
+
+      <h2>Correlação com o spot</h2>
+      <div class="card">{{ offadj_corr | safe }}</div>
+    </div>
+
+    <!-- ══════════════════ CORPORATE ══════════════════ -->
+    <div id="tab-corporate" class="tab">
+      <h2>Posição e resumo</h2>
+      <p class="sub">Sinal cru do BCCh: acima de zero = compra de CLP (venda de USD).</p>
+      <div class="grid-wide">
+        <div class="card">{{ corporate_line | safe }}</div>
+        <div class="card">{{ corporate_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ corporate_delta7 | safe }}</div>
+        <div class="card">{{ corporate_delta28 | safe }}</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ POSIÇÃO DOS BANCOS ══════════════════ -->
+    <div id="tab-banks" class="tab">
+      <h2>Posição e resumo</h2>
+      <div class="grid-wide">
+        <div class="card">{{ banks_line | safe }}</div>
+        <div class="card">{{ banks_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ banks_delta7 | safe }}</div>
+        <div class="card">{{ banks_delta28 | safe }}</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ TOTAL VS USDCLP ══════════════════ -->
+    <div id="tab-total" class="tab">
+      <h2>Positioning (pensiones + offshore) vs USDCLP</h2>
+      <p class="sub">Eixo do USDCLP invertido, para que as duas linhas andem no mesmo sentido quando o
+        posicionamento explica o câmbio.</p>
+      <div class="card">{{ total_vs_usdclp | safe }}</div>
+    </div>
+
+    <!-- ══════════════════ FUNDOS + OFFSHORE ══════════════════ -->
+    <div id="tab-pensoff" class="tab">
+      <h2>Fondos de pensiones vs no residentes</h2>
+      <div class="card">{{ pension_offshore_dual | safe }}</div>
+    </div>
+
+    <!-- ══════════════════ TODOS OS SETORES ══════════════════ -->
+    <div id="tab-sectors" class="tab">
+      <h2>Net semanal por setor</h2>
+      <p class="sub">Convenção de <b>compra de USD</b>. Empilhado: os compradores de USD sobem e os
+        vendedores descem; a linha preta liga o net de cada semana.</p>
+      <div class="card">{{ sectors_net | safe }}</div>
+
+      <h2>Pernas: NDF e spot</h2>
+      <div class="card">{{ sectors_ndf | safe }}</div>
+      <div class="card">{{ sectors_spot | safe }}</div>
+
+      <h2>Tabelas por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ sectors_table_1 | safe }}</div>
+        <div class="card">{{ sectors_table_7 | safe }}</div>
+      </div>
+      <div class="grid2">
+        <div class="card">{{ sectors_table_28 | safe }}</div>
+        <div class="card">
+          <div class="note note-flush">
+            <b>Como ler.</b> Todas as colunas na mesma convenção: acima de zero =
+            <b>compra de USD</b> (venda de CLP), abaixo = venda de USD.
+            <b>Δ NDF</b> é a variação do saldo forward na janela; <b>Spot</b> é o
+            fluxo spot acumulado na janela; <b>Net</b> é a soma das duas.
+            <b>Saldo NDF</b> é o estoque no fim da janela, para dar o contexto de
+            tamanho.
+            <br><br>
+            <b>Atenção ao sinal.</b> Esta aba usa a convenção <b>invertida</b> em
+            relação à aba <i>Offshore Ajustado</i>, onde acima de zero é compra de CLP.
+            <br><br>
+            <b>A hierarquia fecha.</b> Os seis setores indentados somam
+            <b>Residentes no bancos</b>, e este mais <b>No residentes</b> soma o
+            <b>total</b> &mdash; verificado a cada build, diferença de 0,0. Os agregados
+            aparecem em negrito e não são setores: não some agregado com folha.
+            <br><br>
+            Todas as janelas fecham na mesma data, senão a linha de total não
+            fecharia. A janela de cada tabela está no subtítulo dela.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ SWAP CÁMARA ══════════════════ -->
+    <div id="tab-swap" class="tab">
+      <h2>Deltas por participante</h2>
+      <p class="sub">Variação de DV01 (k) por horizonte, para offshore, locais ex-bancos e bancos locais.</p>
+      <div class="grid3">
+        <div class="card">{{ swap_table_ate2y | safe }}</div>
+        <div class="card">{{ swap_table_5y | safe }}</div>
+        <div class="card">{{ swap_table_10y | safe }}</div>
+      </div>
+
+      <h2>Buckets agregados</h2>
+      <div class="grid3">
+        <div class="card">{{ swap_chart_ate2y | safe }}</div>
+        <div class="card">{{ swap_chart_5y | safe }}</div>
+        <div class="card">{{ swap_chart_10y | safe }}</div>
+      </div>
+
+      <h2>Tenores individuais</h2>
+      <div class="grid3">
+        <div class="card">{{ swap_chart_3m | safe }}</div>
+        <div class="card">{{ swap_chart_6m | safe }}</div>
+        <div class="card">{{ swap_chart_9m | safe }}</div>
+      </div>
+      <div class="grid3">
+        <div class="card">{{ swap_chart_12m | safe }}</div>
+        <div class="card">{{ swap_chart_18m | safe }}</div>
+        <div class="card">{{ swap_chart_2y | safe }}</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ SALDOS FWD: USDCOP ══════════════════ -->
+    <div id="tab-colombia" class="tab">
+      <h2>Saldos forward e resumo</h2>
+      <div class="grid-wide">
+        <div class="card">{{ colombia_line | safe }}</div>
+        <div class="card">{{ colombia_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ colombia_delta7 | safe }}</div>
+        <div class="card">{{ colombia_delta28 | safe }}</div>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      <span class="credits"><strong>JGP</strong> Emerging Markets &middot; Painel FX Positioning</span>
+      <span>Gerado em {{ build_timestamp }}</span>
+    </footer>
+  </main>
+</div>
+
+<button class="back-to-top" id="backToTop"><span class="arrow">&uarr;</span><span>TOP</span></button>

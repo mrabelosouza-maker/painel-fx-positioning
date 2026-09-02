@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import logging
+import shutil
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -71,15 +72,43 @@ def build_fx_section(dados):
         return df
 
     # ── FUNDOS DE PENSÃO ──
+    # Unica aba das quatro em compra-de-USD: positivo = compra de USD, negativo
+    # = venda de USD. A serie crua do BCCh vem na otica do banco residente
+    # (positivo = AFP net short USD = AFP vendendo USD), entao entra invertida.
+    # Inverte-se o nivel junto com os deltas, senao tabela e grafico discordam.
+    # As abas de offshore, corporate e bancos seguem no sinal cru.
+    # Deltas em PREGOES (5 e 21), como a aba de fluxo AFP — nao em dias corridos.
     col = "Fondos de pensiones"
-    df_pension = _add_pct_usdclp(compute_deltas(dados, col, [1, 7, 28]))
-    ctx["pension_line"] = make_line_chart(dados, "Data", col, "Fondos de Pensiones: Net Short (USD million)")
-    ctx["pension_table"] = make_summary_table(
-        df_pension, [col, "delta_1d", "delta_7d", "pct_usdclp"],
-        col_labels={col: "Nivel", **fx_labels}, decimals=1,
+    dados_pension = dados.copy()
+    dados_pension[col] = -dados_pension[col]
+    df_pension = _add_pct_usdclp(
+        compute_deltas(dados_pension, col, [1, 5, 21], sessions=True)
     )
-    ctx["pension_delta7"] = make_bar_chart(df_pension, "Data", "delta_7d", "DELTA 7 DIAS: Fondos de Pensiones (USD million)")
-    ctx["pension_delta28"] = make_bar_chart(df_pension, "Data", "delta_28d", "DELTA 28 DIAS: Fondos de Pensiones (USD million)")
+    pension_labels = {
+        "delta_1d": "Delta 1D",
+        "delta_5d": "Delta 5D",
+        "delta_21d": "Delta 21D",
+        "pct_usdclp": "% USDCLP",
+    }
+    ctx["pension_line"] = make_line_chart(
+        dados_pension, "Data", col,
+        "Fondos de Pensiones: Posição em USD (USD million)",
+        usd_labels=True,
+    )
+    ctx["pension_table"] = make_summary_table(
+        df_pension, [col, "delta_1d", "delta_5d", "pct_usdclp"],
+        col_labels={col: "Nivel", **pension_labels}, decimals=1,
+    )
+    ctx["pension_delta5"] = make_bar_chart(
+        df_pension, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: Fondos de Pensiones (USD million)",
+        usd_labels=True,
+    )
+    ctx["pension_delta21"] = make_bar_chart(
+        df_pension, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: Fondos de Pensiones (USD million)",
+        usd_labels=True,
+    )
 
     # ── OFFSHORE ──
     col = "No residentes"
@@ -365,6 +394,27 @@ def build_colombia_section(col_data):
     return ctx
 
 
+def _copiar_plotly() -> None:
+    """Coloca o plotly.min.js do pacote instalado ao lado do index.html.
+
+    A casca JGP pede a lib local, nao de CDN. E aqui isso tambem corrige um
+    descasamento: as figuras sao serializadas pelo plotly.py instalado, e a
+    versao do CDN que o painel usava era outra. Copia so quando muda de
+    tamanho — sao ~5 MB e o commit diario nao precisa reescrever isso.
+    """
+    import plotly
+    origem = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
+    destino = OUTPUT_DIR / "plotly.min.js"
+    if not origem.exists():
+        logger.warning("plotly.min.js nao encontrado em %s", origem)
+        return
+    if destino.exists() and destino.stat().st_size == origem.stat().st_size:
+        return
+    shutil.copyfile(origem, destino)
+    logger.info("plotly.min.js copiado (%s, %.1f MB)",
+                plotly.__version__, origem.stat().st_size / 1e6)
+
+
 def main():
     t0 = time.time()
 
@@ -410,6 +460,7 @@ def main():
     html = template.render(**context)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    _copiar_plotly()
     output_path = OUTPUT_DIR / "index.html"
     output_path.write_text(html, encoding="utf-8")
 

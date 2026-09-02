@@ -1,356 +1,790 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel FX Positioning</title>
-    <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #f5f5f5; color: #333;
-        }
-        .header {
-            background: #2c3e50; color: white; padding: 16px 24px;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .header h1 { font-size: 1.3rem; font-weight: 600; }
-        .header .subtitle { font-size: 0.85rem; opacity: 0.8; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel FX Positioning &mdash; JGP Macro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="plotly.min.js"></script>
+<style>
+/* =====================================================================
+     Tema JGP (analise_html): Inter única, papel creme quente + tinta preta,
+     verde JGP como acento, topnav + sidebar + header editorial.
+     As variáveis --surface/--ink/--s1…/--chart-* são consumidas pelo JS do
+     chart (theme(), baseLayout(), séries) — NÃO renomeie nem remova.
+     ===================================================================== */
+  :root{
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    /* paleta editorial */
+    --bg-page:#F6F4EE; --bg-content:#FFFFFF; --bg-subtle:#FAFAF7; --bg-overlay:rgba(246,244,238,.85);
+    --ink-primary:#0A0A0A; --ink-secondary:#4A4A48; --ink-tertiary:#8C8C88; --ink-quaternary:#B8B8B2;
+    --jgp-green:#00B050; --jgp-green-deep:#008A3F; --jgp-green-tint:rgba(0,176,80,.08);
+    --rule-strong:#0A0A0A; --rule-soft:#DDD9CE; --rule-faint:#ECE8DC;
+    --container-max:1840px; --sidebar-width:240px; --scroll-progress:0%;
+    /* mapeamento p/ o dashboard (consumido pelo JS/Plotly) */
+    --page:var(--bg-page); --surface:var(--bg-content); --ink:var(--ink-primary);
+    --ink2:var(--ink-secondary); --muted:var(--ink-tertiary);
+    --grid:var(--rule-faint); --axis:var(--rule-soft); --line:var(--rule-soft);
+    --green:var(--jgp-green); --green-dark:var(--jgp-green-deep); --red:#E63946;
+    --sec:#E4E0D3; --hl:var(--jgp-green-tint);
 
-        /* Tabs */
-        .tab-bar {
-            background: #34495e; display: flex; flex-wrap: wrap;
-            padding: 0 16px; gap: 2px;
-        }
-        .tab-btn {
-            background: transparent; border: none; color: #bdc3c7;
-            padding: 10px 16px; cursor: pointer; font-size: 0.8rem;
-            font-weight: 500; border-bottom: 3px solid transparent;
-            transition: all 0.2s; white-space: nowrap;
-        }
-        .tab-btn:hover { color: white; background: rgba(255,255,255,0.05); }
-        .tab-btn.active {
-            color: white; border-bottom-color: #3498db;
-            background: rgba(255,255,255,0.1);
-        }
+    /* ---- Paleta JGP (funcoes_graficas_jgp/config.py · PALETTE_JGP) ----
+       Ordem canônica: verde · preto · cinza · azul · verde-claro · azul-claro · laranja.
+       Semântica: verde=série principal/realizado · preto=série secundária ·
+       cinza=neutro/mediana histórica · azul=alternativa · verde-claro=projeção da verde ·
+       azul-claro=ano anterior em sazonais · laranja=alerta moderado · vermelho=alerta forte. */
+    --jgp-verde:#00B050; --jgp-preto:#1F1F1F; --jgp-cinza:#7F7F7F; --jgp-azul:#0070C0;
+    --jgp-verde-claro:#92D050; --jgp-azul-claro:#00B0F0; --jgp-laranja:#FFA500; --jgp-vermelho:#E63946;
 
-        .tab-content { display: none; padding: 20px; }
-        .tab-content.active { display: block; }
+    /* séries do chart = paleta JGP na ordem canônica */
+    --s1:var(--jgp-verde); --s2:var(--jgp-preto); --s3:var(--jgp-cinza); --s4:var(--jgp-azul);
+    --d1:var(--jgp-verde-claro); --d2:var(--jgp-azul-claro); --d3:var(--jgp-laranja);
+    --accent:var(--jgp-azul);   /* chrome de UI (foco, célula editada) — NÃO é cor de série */
+    --band:rgba(127,127,127,.18); --band-strong:rgba(127,127,127,.30); --median:var(--jgp-cinza);
+    --prior:var(--jgp-azul-claro); --cur:var(--jgp-verde);
 
-        /* Layout */
-        .row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
-        .panel { flex: 1; min-width: 300px; background: white; border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .panel-wide { flex: 2; }
-        .panel-narrow { flex: 1; }
+    /* estrutura do chart (tema.py: setup_matplotlib + aplicar_tema) */
+    --chart-grid:#EBEBEB; --chart-axis:#000000; --chart-zero:var(--jgp-cinza);
+    --chart-legend:#4D4D4D; --chart-title:#1F1F1F; --chart-sub:#666666; --chart-caption:#8C8C8C;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg-page:#0d0d0d; --bg-content:#1a1a19; --bg-subtle:#161615; --bg-overlay:rgba(13,13,13,.85);
+      --ink-primary:#ffffff; --ink-secondary:#c3c2b7; --ink-tertiary:#898781; --ink-quaternary:#5a5a58;
+      --jgp-green:#00b856; --jgp-green-deep:#00a04a; --jgp-green-tint:rgba(0,184,86,.15);
+      --rule-strong:#e8e8e4; --rule-soft:#383835; --rule-faint:#2c2c2a;
+      --red:#E66767; --sec:#2b2b28; --hl:var(--jgp-green-tint);
+      /* Paleta JGP no dark: mesma identidade/ordem, luminância elevada p/ contraste. */
+      --jgp-verde:#00C95C; --jgp-preto:#E8E8E4; --jgp-cinza:#9A9A94; --jgp-azul:#3D9BE0;
+      --jgp-verde-claro:#A8DC6B; --jgp-azul-claro:#3FC8F5; --jgp-laranja:#FFB733; --jgp-vermelho:#E66767;
+      --band:rgba(154,154,148,.20); --band-strong:rgba(154,154,148,.32);
+      --chart-grid:#2C2C2A; --chart-axis:#E8E8E4; --chart-zero:var(--jgp-cinza);
+      --chart-legend:#C3C2B7; --chart-title:#FFFFFF; --chart-sub:#A9A79F; --chart-caption:#898781;
+    }
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  body{font-family:var(--font);font-weight:400;background:var(--bg-page);color:var(--ink-primary);
+       line-height:1.55;font-size:15px;letter-spacing:-.005em;font-feature-settings:'cv11','ss01','ss03';
+       padding-top:47px;
+       background-image:radial-gradient(circle at 20% 30%,rgba(0,0,0,.012) 0%,transparent 35%),
+                        radial-gradient(circle at 80% 70%,rgba(0,0,0,.008) 0%,transparent 40%)}
+  ::selection{background:var(--jgp-green);color:#fff}
 
-        /* Tables */
-        .data-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-        .data-table th {
-            background: #2c3e50; color: white; padding: 8px 10px;
-            text-align: left; font-weight: 500;
-        }
-        .data-table td { padding: 6px 10px; border-bottom: 1px solid #eee; }
-        .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-        .data-table tr:hover { background: #f8f9fa; }
-        .data-table .row-label { font-weight: 500; }
-        .data-table tr.row-agg td { font-weight: 700; border-top: 2px solid #2c3e50; background: #f4f6f8; }
-        .note { margin-top: 14px; font-size: 0.78rem; line-height: 1.5; color: #555;
-                border-top: 1px solid #eee; padding-top: 12px; }
-        .swap-table { margin-top: 4px; }
-        .table-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; }
-        .table-subtitle { font-size: 0.78rem; color: #777; margin-bottom: 8px; }
+  /* ==== Barra de progresso de scroll ==== */
+  .scroll-progress{position:fixed;top:0;left:0;right:0;height:3px;background:var(--rule-faint);z-index:200}
+  .scroll-progress::after{content:'';display:block;height:100%;width:var(--scroll-progress);
+    background:var(--jgp-green);transition:width .06s linear}
 
-        /* Swap grid */
-        .swap-tables-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-        .swap-table-panel { flex: 1; min-width: 280px; background: white; border-radius: 6px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .swap-charts-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-        .swap-chart-panel { flex: 1; min-width: 420px; background: white; border-radius: 6px; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+  /* ==== Top nav ==== */
+  .topnav{position:fixed;top:3px;left:0;right:0;height:44px;background:var(--bg-overlay);
+    backdrop-filter:saturate(140%) blur(12px);-webkit-backdrop-filter:saturate(140%) blur(12px);
+    border-bottom:1px solid var(--rule-faint);z-index:150;display:flex;align-items:center;
+    justify-content:space-between;padding:0 1.5rem}
+  .topnav-left{display:flex;align-items:baseline;gap:.6rem;font-size:.74rem;font-weight:500;letter-spacing:.02em}
+  .topnav .wordmark{font-weight:700;font-size:.96rem;letter-spacing:-.01em;color:var(--ink-primary)}
+  .topnav .divider{color:var(--ink-quaternary)}
+  .topnav .breadcrumb{color:var(--ink-secondary);font-weight:400;text-transform:uppercase;letter-spacing:.08em;font-size:.7rem}
+  .topnav-right{font-size:.7rem;font-weight:500;letter-spacing:.06em;color:var(--ink-tertiary);text-transform:uppercase}
+  .topnav-right .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.18rem .55rem;
+    border:1px solid var(--rule-soft);border-radius:999px;background:var(--bg-content)}
+  .topnav-right .pill::before{content:'';display:block;width:6px;height:6px;border-radius:50%;background:var(--jgp-green)}
 
-        .footer {
-            text-align: center; padding: 16px; font-size: 0.75rem; color: #999;
-        }
+  /* ==== Botão de ocultar/mostrar sumário ==== */
+  .nav-toggle{align-self:center;display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:26px;margin-right:.15rem;padding:0;border:1px solid var(--rule-soft);border-radius:5px;
+    background:transparent;color:var(--ink-secondary);cursor:pointer;font-size:14px;line-height:1;
+    transition:color .15s ease,border-color .15s ease}
+  .nav-toggle:hover{color:var(--jgp-green);border-color:var(--jgp-green)}
 
-        /* Plotly responsive */
-        .js-plotly-plot { width: 100% !important; }
-    </style>
+  /* ==== Wrapper com sidebar ==== */
+  .page-wrapper{display:grid;grid-template-columns:var(--sidebar-width) 1fr;max-width:var(--container-max);
+    margin:0 auto;background:var(--bg-content);min-height:calc(100vh - 47px);
+    border-left:1px solid var(--rule-faint);border-right:1px solid var(--rule-faint)}
+  .page-wrapper.nav-collapsed{grid-template-columns:1fr}
+  .page-wrapper.nav-collapsed .sidebar{display:none}
+  .sidebar{position:sticky;top:47px;align-self:start;height:calc(100vh - 47px);overflow-y:auto;
+    padding:2.2rem 1.4rem 2rem 1.6rem;border-right:1px solid var(--rule-faint);background:var(--bg-subtle)}
+  .sidebar::-webkit-scrollbar{width:6px}
+  .sidebar::-webkit-scrollbar-thumb{background:var(--rule-soft);border-radius:3px}
+  .sidebar-eyebrow{font-size:.65rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-tertiary);margin-bottom:1.1rem;display:flex;align-items:center;gap:.5rem}
+  .sidebar-eyebrow::after{content:'';flex:1;height:1px;background:var(--rule-soft)}
+  .sidebar-chapter{display:block;text-decoration:none;margin:1.4rem -.5rem .4rem;padding:.4rem .5rem;
+    border-radius:2px;transition:background .15s ease;cursor:pointer}
+  .sidebar-chapter:first-of-type{margin-top:0}
+  .sidebar-chapter:hover{background:var(--jgp-green-tint)}
+  .sidebar-chapter .name{font-weight:700;font-size:.95rem;letter-spacing:-.012em;color:var(--ink-primary)}
+  .sidebar-chapter.active{background:var(--jgp-green-tint)}
+  .sidebar-link{display:flex;align-items:center;gap:.55rem;font-size:.78rem;font-weight:400;
+    color:var(--ink-secondary);text-decoration:none;padding:5px 0 5px .1rem;line-height:1.4;
+    transition:color .18s ease;position:relative}
+  .sidebar-link::before{content:'';display:block;width:4px;height:4px;border-radius:50%;
+    background:var(--ink-quaternary);flex-shrink:0;transition:background .18s ease,transform .18s ease}
+  .sidebar-link:hover{color:var(--ink-primary)}
+  .sidebar-link:hover::before{background:var(--jgp-green)}
+  .sidebar-link.active{color:var(--ink-primary);font-weight:600}
+  .sidebar-link.active::before{background:var(--jgp-green);transform:scale(1.6);box-shadow:0 0 0 3px var(--jgp-green-tint)}
+  .sidebar-link .item-num{font-size:.68rem;color:var(--ink-tertiary);font-weight:500;margin-left:auto;
+    font-feature-settings:'tnum' 1;letter-spacing:.02em}
+
+  /* ==== Conteúdo principal ==== */
+  .main-content{padding:2rem 1.8rem 4rem;min-width:0;position:relative}
+
+  /* ==== Header da página ==== */
+  .page-header{margin-bottom:2.6rem;padding-bottom:1.6rem;border-bottom:1px solid var(--rule-strong);position:relative}
+  .page-header::after{content:'';position:absolute;bottom:-1px;left:0;width:80px;height:3px;background:var(--jgp-green)}
+  .page-eyebrow{font-size:.7rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-tertiary);margin-bottom:1.2rem;display:flex;align-items:center;gap:.7rem}
+  .page-eyebrow .tag{padding:.18rem .55rem;background:var(--ink-primary);color:var(--bg-content);letter-spacing:.1em;font-weight:600}
+  .page-title{font-weight:700;font-size:clamp(2rem,3.6vw,2.9rem);line-height:1.05;letter-spacing:-.028em;
+    color:var(--ink-primary);margin-bottom:.6rem}
+  .page-meta{display:flex;flex-wrap:wrap;gap:1.6rem;font-size:.74rem;font-weight:500;color:var(--ink-tertiary);
+    text-transform:uppercase;letter-spacing:.08em;margin-top:1.4rem;font-feature-settings:'tnum' 1}
+  .page-meta .meta-item{display:flex;gap:.4rem;align-items:baseline}
+  .page-meta dt{color:var(--ink-quaternary);font-weight:500}
+  .page-meta dd{color:var(--ink-secondary);font-weight:600}
+
+  /* ==== Títulos de seção (h1 legacy + h2 numeradas) ==== */
+  h1{font-weight:700;font-size:clamp(2rem,3.6vw,2.9rem);line-height:1.05;letter-spacing:-.028em;margin:0 0 .6rem}
+  h2{counter-increment:sec;display:flex;align-items:baseline;gap:.7rem;font-weight:600;font-size:1.02rem;
+    letter-spacing:-.005em;color:var(--ink-primary);margin:1.7rem 0 .7rem;padding-bottom:.4rem;
+    border-bottom:1px dashed var(--rule-soft);scroll-margin-top:70px}
+  h2::before{content:counter(sec,decimal-leading-zero);font-size:.78rem;font-weight:600;color:var(--jgp-green);
+    letter-spacing:.04em;flex-shrink:0;font-feature-settings:'tnum' 1}
+  .tab{counter-reset:sec}
+  .lead,.sub{font-size:12.5px;color:var(--ink-secondary);margin:0 0 8px;max-width:1400px;line-height:1.5}
+  .sub{color:var(--ink-tertiary)}
+
+  /* ==== Tabelas ==== */
+  .wrap{overflow-x:auto;margin-bottom:6px}
+  table{border-collapse:collapse;font-size:12px;min-width:760px;width:100%;max-width:1040px}
+  th,td{border:1px solid var(--line);padding:3px 8px;white-space:nowrap}
+  thead th{background:var(--green);color:#fff;font-weight:700;text-align:center;border-color:var(--green-dark)}
+  thead th.left{text-align:left}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  td.lbl,td.cat{text-align:left} td.peso{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2)}
+  tr.headline td{background:var(--hl);font-weight:700}
+  tr.core td{background:var(--sec);color:var(--ink);font-weight:700}
+  tr.section td{background:var(--sec);font-weight:700}
+  td.cat{color:var(--red);font-weight:700;text-decoration:underline}
+  td.item{padding-left:26px} td.item2{padding-left:40px}
+  tr.zebra td{background:rgba(128,128,128,.06)}
+  td.nd{color:var(--muted);text-align:center;font-style:italic}
+  .neg{color:var(--red)}
+  .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  @media (max-width:820px){.grid2{grid-template-columns:1fr}}
+  /* cards = molduras de figura: título 14 bold · subtítulo 11 (Last data) · caption de fonte 11 */
+  .card{background:var(--bg-content);border:1px solid var(--rule-faint);border-radius:2px;padding:.5rem .6rem;
+    transition:border-color .25s ease;margin-bottom:14px}
+  .card:hover{border-color:var(--rule-soft)}
+  .card h3{font-size:14px;font-weight:700;margin:0 0 1px;color:var(--chart-title);letter-spacing:-.01em;line-height:1.25}
+  .card .csub{font-size:11px;font-weight:400;color:var(--chart-sub);margin:0 0 6px;line-height:1.35}
+  .card .cfonte{font-size:11px;color:var(--chart-caption);margin:4px 0 0;line-height:1.3}
+  .plot{width:100%}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0 8px}
+  .controls label{font-size:12px;color:var(--ink2)}
+  select{font:inherit;font-size:12px;padding:4px 8px;border:1px solid var(--axis);border-radius:5px;background:var(--surface);color:var(--ink)}
+  .seg{display:inline-flex;border:1px solid var(--axis);border-radius:5px;overflow:hidden}
+  .seg button{font:inherit;font-size:12px;padding:4px 12px;border:0;background:var(--surface);color:var(--ink2);cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+  .foot{font-size:11px;color:var(--muted);margin-top:16px;max-width:1100px;line-height:1.55}
+  code{background:var(--jgp-green-tint);color:var(--ink-secondary);padding:1px 4px;border-radius:3px;
+    font-size:.92em;font-feature-settings:'tnum' 1}
+
+  /* ==== Footer ==== */
+  .page-footer{margin-top:5rem;padding-top:1.6rem;border-top:1px solid var(--rule-strong);position:relative;
+    display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;
+    font-size:.72rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-tertiary)}
+  .page-footer::before{content:'';position:absolute;top:-1px;left:0;width:80px;height:3px;background:var(--jgp-green)}
+  .page-footer .credits{color:var(--ink-secondary);font-weight:500}
+  .page-footer .credits strong{color:var(--ink-primary);font-weight:700}
+
+  /* ==== Back to top ==== */
+  .back-to-top{position:fixed;bottom:2rem;right:2rem;width:44px;height:44px;background:var(--ink-primary);
+    color:var(--bg-content);border:none;cursor:pointer;font-family:inherit;font-size:.55rem;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;opacity:0;transform:translateY(10px);
+    transition:opacity .3s ease,transform .3s ease,background .2s ease;z-index:120;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:.05rem;line-height:1}
+  .back-to-top:hover{background:var(--jgp-green-deep)}
+  .back-to-top.visible{opacity:1;transform:translateY(0)}
+  .back-to-top .arrow{font-size:1rem;font-weight:400}
+
+  /* ==== Animações ==== */
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .fade-up{opacity:0;animation:fadeUp .55s cubic-bezier(.2,0,.1,1) forwards}
+  .delay-1{animation-delay:.05s} .delay-2{animation-delay:.18s}
+
+  /* ==== Abas de capítulo — tabbar sticky (padrão Fiscal / analise_html) ==== */
+  .tabbar{position:sticky;top:47px;z-index:30;display:flex;gap:2px;flex-wrap:wrap;
+    padding:0 clamp(1rem,3vw,3rem);background:var(--bg-overlay);
+    backdrop-filter:saturate(140%) blur(12px);-webkit-backdrop-filter:saturate(140%) blur(12px);
+    border-bottom:1px solid var(--rule-soft)}
+  .tabbtn{padding:11px 16px;font-size:13px;font-weight:600;color:var(--ink-secondary);
+    background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;
+    font-family:var(--font);transition:color .18s ease}
+  .tabbtn:hover{color:var(--ink-primary)}
+  .tabbtn.on{color:var(--ink-primary);border-bottom:2px solid var(--jgp-green)}
+  .tab{display:none} .tab.on{display:block}
+  /* sidebar abaixo da tabbar (topnav 47 + tabbar 45) */
+  .sidebar{top:92px;height:calc(100vh - 92px)}
+  h2{scroll-margin-top:104px}
+
+  /* ==== Responsivo ==== */
+  @media (max-width:1100px){
+    .page-wrapper{grid-template-columns:1fr}
+    .sidebar{display:none}
+    .main-content{padding:2rem 1.4rem 4rem}
+  }
+  /* tabela de projeção */
+  .ptbl-wrap{overflow-x:auto;margin-bottom:8px;border:1px solid var(--grid);border-radius:6px;max-height:640px}
+  table.ptbl{border-collapse:separate;border-spacing:0;font-size:11px;min-width:1400px}
+  table.ptbl th,table.ptbl td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:2px 5px;white-space:nowrap}
+  table.ptbl thead th{position:sticky;top:0;background:var(--green);color:#fff;font-weight:700;text-align:center;z-index:3}
+  table.ptbl th.name,table.ptbl td.name{position:sticky;left:0;z-index:2;text-align:left;min-width:210px;
+    background:var(--surface);border-right:2px solid var(--axis)}
+  table.ptbl thead th.name{z-index:4;background:var(--green)}
+  table.ptbl td.yy{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;background:rgba(0,138,62,.08)}
+  table.ptbl td.val{text-align:right;font-variant-numeric:tabular-nums;padding:0}
+  table.ptbl td.val input{width:52px;border:0;background:transparent;color:var(--ink);font:inherit;text-align:right;
+    padding:2px 5px;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+  table.ptbl td.val input::-webkit-outer-spin-button,table.ptbl td.val input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  table.ptbl td.val input:focus{outline:2px solid var(--accent);background:var(--surface)}
+  table.ptbl td.val input.edited{background:rgba(42,120,214,.16);font-weight:600}
+  table.ptbl td.comp{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink2);background:rgba(128,128,128,.05)}
+  table.ptbl tr.lvl0 td{background:var(--hl);font-weight:700}
+  table.ptbl tr.lvl0 td.name{background:var(--hl);padding-left:8px}
+  table.ptbl tr.lvl1 td{background:var(--sec);font-weight:700}
+  table.ptbl tr.lvl1 td.name{background:var(--sec)}
+  table.ptbl tr.lvl2 td.name{color:var(--red);font-weight:700;padding-left:16px}
+  table.ptbl tr.leaf td.name{padding-left:24px;color:var(--ink)}
+  table.ptbl td.sep{border-left:2px solid var(--axis)}
+  .pgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}
+  @media (max-width:820px){.pgrid{grid-template-columns:1fr}}
+  .kpis{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 14px}
+  .kpi{background:var(--surface);border:1px solid var(--grid);border-radius:6px;padding:8px 14px;min-width:132px}
+  .kpi .k{font-size:11px;color:var(--muted)} .kpi .v{font-size:21px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+  .kpi .d{font-size:11px;color:var(--ink2)}
+  button.act{font:inherit;font-size:12px;font-weight:600;padding:6px 14px;border:1px solid var(--axis);border-radius:5px;
+    background:var(--surface);color:var(--ink);cursor:pointer}
+  button.act:hover{border-color:var(--green);color:var(--green)}
+
+  /* ==== Extensoes do painel FX Positioning ==== */
+  /* Grid 2:1 (grafico grande + tabela) e grid de 3 (tenores do swap). */
+  .grid-wide{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+  .grid-wide > .card:last-child{align-self:start}
+  @media (max-width:1200px){.grid-wide,.grid3{grid-template-columns:1fr}}
+  @media (max-width:820px){.grid-wide,.grid3{grid-template-columns:1fr}}
+
+  /* Os graficos vem prontos do Python (plotly to_html); o card e a moldura. */
+  .card .js-plotly-plot{width:100%!important}
+  .card > .plotly-graph-div{margin:0 auto}
+
+  /* Tabelas emitidas pelo table_builder.py (.data-table) na moldura JGP:
+     cabecalho verde, numeros tabulares, agregados com risco em cima. */
+  table.data-table{border-collapse:collapse;font-size:12px;width:100%;min-width:0;max-width:none}
+  table.data-table th,table.data-table td{border:1px solid var(--line);padding:3px 8px;white-space:nowrap}
+  table.data-table thead th{background:var(--green);color:#fff;font-weight:700;text-align:center;
+    border-color:var(--green-dark)}
+  table.data-table thead th:first-child{text-align:left}
+  table.data-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.data-table td.row-label{text-align:left;font-weight:600}
+  table.data-table tbody tr:hover td{background:var(--jgp-green-tint)}
+  table.data-table tr.row-agg td{background:var(--sec);font-weight:700;
+    border-top:2px solid var(--rule-strong)}
+  .table-title{font-size:14px;font-weight:700;color:var(--chart-title);margin:0 0 1px;letter-spacing:-.01em}
+  .table-subtitle{font-size:11px;color:var(--chart-sub);margin:0 0 6px;line-height:1.35}
+
+  /* Notas de leitura dentro de um card. */
+  .note{font-size:11.5px;line-height:1.55;color:var(--ink-secondary);
+    border-top:1px solid var(--rule-faint);margin-top:12px;padding-top:10px}
+  .note-flush{border-top:none;margin-top:0;padding-top:0}
+
+</style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h1>Painel FX Positioning</h1>
-            <div class="subtitle">JGP Emerging Markets</div>
-        </div>
-        <div class="subtitle">Atualizado: {{ build_timestamp }}</div>
+
+<div class="scroll-progress" id="scrollProgress"></div>
+
+<nav class="topnav">
+  <div class="topnav-left">
+    <button class="nav-toggle" id="navToggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Ocultar sumário">&#9776;</button>
+    <span class="wordmark">JGP</span>
+    <span class="divider">&middot;</span>
+    <span class="breadcrumb">Chile &middot; FX Positioning</span>
+  </div>
+  <div class="topnav-right"><span class="pill">BCCh &middot; {{ build_timestamp }}</span></div>
+</nav>
+
+<nav class="tabbar" id="tabs">
+  <button class="tabbtn on" data-tab="pension">Fundos de Pensão</button>
+  <button class="tabbtn" data-tab="afpflow">Fluxo AFP</button>
+  <button class="tabbtn" data-tab="offshore">Offshore</button>
+  <button class="tabbtn" data-tab="offadj">Offshore Ajustado</button>
+  <button class="tabbtn" data-tab="corporate">Corporate</button>
+  <button class="tabbtn" data-tab="banks">Bancos</button>
+  <button class="tabbtn" data-tab="total">Total vs USDCLP</button>
+  <button class="tabbtn" data-tab="pensoff">Fundos + Offshore</button>
+  <button class="tabbtn" data-tab="sectors">Todos os Setores</button>
+  <button class="tabbtn" data-tab="swap">Swap Cámara</button>
+  <button class="tabbtn" data-tab="colombia">Saldos Fwd USDCOP</button>
+</nav>
+
+<div class="page-wrapper">
+  <nav class="sidebar" id="sidebar"><div class="sidebar-eyebrow">Sumário</div></nav>
+
+  <main class="main-content">
+    <header class="page-header fade-up delay-1">
+      <div class="page-eyebrow"><span class="tag">Posicionamento</span></div>
+      <h1 class="page-title">Painel FX Positioning</h1>
+      <p class="lead">Posição em câmbio dos setores no mercado chileno &mdash; saldo de NDF e fluxo spot
+        publicados pelo Banco Central de Chile &mdash; mais a curva de swap cámara e os saldos forward
+        em USDCOP.</p>
+      <dl class="page-meta">
+        <div class="meta-item"><dt>Fonte</dt><dd>BCCh &middot; Banrep &middot; Bloomberg</dd></div>
+        <div class="meta-item"><dt>Atualizado</dt><dd>{{ build_timestamp }}</dd></div>
+        <div class="meta-item"><dt>Macro</dt><dd>JGP Emerging Markets</dd></div>
+      </dl>
+    </header>
+
+    <!-- ══════════════════ FUNDOS DE PENSÃO ══════════════════ -->
+    <div id="tab-pension" class="tab on">
+      <h2>Posição e resumo</h2>
+      <p class="sub">Convenção desta aba: <b>acima de zero = compra de USD</b>, abaixo de zero = venda de USD.
+        A série crua do BCCh vem na ótica do banco residente (positivo = fundo vendendo USD) e entra aqui
+        invertida, para bater com a aba de Fluxo AFP.</p>
+      <div class="grid-wide">
+        <div class="card">{{ pension_line | safe }}</div>
+        <div class="card">{{ pension_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <p class="sub">Janelas em <b>pregões</b>, não em dias corridos: a série só tem dia útil, então o
+        deslocamento é de exatamente 5 e 21 sessões.</p>
+      <div class="grid2">
+        <div class="card">{{ pension_delta5 | safe }}</div>
+        <div class="card">{{ pension_delta21 | safe }}</div>
+      </div>
     </div>
 
-    <div class="tab-bar">
-        <button class="tab-btn active" onclick="showTab('pension')">FUNDOS DE PENSÃO</button>
-        <button class="tab-btn" onclick="showTab('afpflow')">FLUXO AFP: NDF + SPOT</button>
-        <button class="tab-btn" onclick="showTab('offshore')">OFFSHORE</button>
-        <button class="tab-btn" onclick="showTab('offadj')">OFFSHORE AJUSTADO</button>
-        <button class="tab-btn" onclick="showTab('corporate')">CORPORATE</button>
-        <button class="tab-btn" onclick="showTab('banks')">POSIÇÃO DOS BANCOS</button>
-        <button class="tab-btn" onclick="showTab('total')">TOTAL VS USDCLP</button>
-        <button class="tab-btn" onclick="showTab('pensoff')">FUNDOS + OFFSHORE</button>
-        <button class="tab-btn" onclick="showTab('sectors')">TODOS OS SETORES</button>
-        <button class="tab-btn" onclick="showTab('swap')">SWAP CAMARA</button>
-        <button class="tab-btn" onclick="showTab('colombia')">SALDOS FWD: USDCOP</button>
+    <!-- ══════════════════ FLUXO AFP: NDF + SPOT ══════════════════ -->
+    <div id="tab-afpflow" class="tab">
+      <h2>Últimos 5 pregões</h2>
+      <div class="grid-wide">
+        <div class="card">{{ afp_5d | safe }}</div>
+        <div class="card">
+          {{ afp_table | safe }}
+          <div class="note">
+            <b>As duas pernas.</b> <b>NDF</b> é a variação do saldo forward que o
+            BCCh publica para o setor 42; <b>spot</b> é o fluxo spot que o BCCh
+            observa no mesmo setor. As duas na mesma convenção: acima de zero =
+            <b>compra de USD</b> (venda de CLP).
+            <br><br>
+            <b>Atenção ao sinal.</b> Esta aba, a de <i>Fundos de Pensão</i> e a de
+            <i>Todos os Setores</i> usam a ótica do USD; a de <i>Offshore Ajustado</i>
+            segue na de compra de CLP, com o sinal oposto.
+            <br><br>
+            <b>Janela de 5 pregões</b>, não de 5 dias corridos: a série só tem dia
+            útil, então o deslocamento é de exatamente cinco sessões. Com dias
+            corridos a janela cobriria 3 pregões na segunda e 5 só na sexta.
+            <br><br>
+            As fontes têm defasagem diferente, então a janela fecha na última data
+            em que as duas existem &mdash; impressa no rótulo de cada barra.
+          </div>
+        </div>
+      </div>
+
+      <h2>Fluxo semanal</h2>
+      <div class="card">{{ afp_weekly | safe }}</div>
+
+      <h2>Janelas rolantes</h2>
+      <div class="card">{{ afp_roll5 | safe }}</div>
+      <div class="card">{{ afp_roll21 | safe }}</div>
+
+      <h2>Níveis acumulados e resíduo</h2>
+      <div class="card">{{ afp_levels | safe }}</div>
+
+      <h2>Pernas diárias</h2>
+      <div class="grid2">
+        <div class="card">{{ afp_ndf_level | safe }}</div>
+        <div class="card">{{ afp_spot_daily | safe }}</div>
+      </div>
+      <div class="card">{{ afp_net_daily | safe }}</div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- FUNDOS DE PENSÃO -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-pension" class="tab-content active">
-        <div class="row">
-            <div class="panel panel-wide">{{ pension_line | safe }}</div>
-            <div class="panel panel-narrow">{{ pension_table | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ pension_delta7 | safe }}</div>
-            <div class="panel">{{ pension_delta28 | safe }}</div>
-        </div>
+    <!-- ══════════════════ OFFSHORE ══════════════════ -->
+    <div id="tab-offshore" class="tab">
+      <h2>Posição e resumo</h2>
+      <p class="sub">Sinal cru do BCCh: acima de zero = compra de CLP (venda de USD).</p>
+      <div class="grid-wide">
+        <div class="card">{{ offshore_line | safe }}</div>
+        <div class="card">{{ offshore_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ offshore_delta7 | safe }}</div>
+        <div class="card">{{ offshore_delta28 | safe }}</div>
+      </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- FLUXO AFP: NDF + SPOT -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-afpflow" class="tab-content">
-        <div class="row">
-            <div class="panel panel-wide">{{ afp_5d | safe }}</div>
-            <div class="panel panel-narrow">
-                {{ afp_table | safe }}
-                <div class="note">
-                    <b>As duas pernas.</b> <b>NDF</b> é a variação do saldo forward que o
-                    BCCh publica para o setor 42; <b>spot</b> é o fluxo spot que o BCCh
-                    observa no mesmo setor. As duas na mesma convenção: acima de zero =
-                    <b>compra de USD</b> (venda de CLP).
-                    <br><br>
-                    <b>Atenção ao sinal.</b> Esta aba e a de <i>Todos os Setores</i> usam a
-                    ótica do USD; a de <i>Offshore Ajustado</i> segue na de compra de CLP,
-                    com o sinal oposto. Vale também para o nível do saldo: aqui os fundos
-                    de pensão aparecem net short USD, e na aba <b>Fundos de Pensão</b> com
-                    o sinal cru do BCCh, invertido.
-                    <br><br>
-                    <b>Janela de 5 pregões</b>, não de 5 dias corridos: a série só tem dia
-                    útil, então o deslocamento é de exatamente cinco sessões. Com dias
-                    corridos a janela cobriria 3 pregões na segunda e 5 só na sexta.
-                    <br><br>
-                    As fontes têm defasagem diferente, então a janela fecha na última data
-                    em que as duas existem — impressa no rótulo de cada barra. Ela pode ser
-                    anterior à última data da aba <b>Fundos de Pensão</b>.
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ afp_weekly | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ afp_roll5 | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ afp_roll21 | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ afp_levels | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ afp_ndf_level | safe }}</div>
-            <div class="panel">{{ afp_spot_daily | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ afp_net_daily | safe }}</div>
-        </div>
+    <!-- ══════════════════ OFFSHORE AJUSTADO ══════════════════ -->
+    <div id="tab-offadj" class="tab">
+      <h2>Posição ajustada e resumo</h2>
+      <p class="sub">Convenção de <b>compra de CLP</b>: acima de zero = comprando CLP (vendendo USD).
+        Invertida em relação às abas de Fundos de Pensão, Fluxo AFP e Todos os Setores.</p>
+      <div class="grid-wide">
+        <div class="card">{{ offadj_chart | safe }}</div>
+        <div class="card">{{ offadj_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ offadj_delta7 | safe }}</div>
+        <div class="card">{{ offadj_delta28 | safe }}</div>
+      </div>
+
+      <h2>Fluxo semanal por perna</h2>
+      <div class="card">{{ offadj_weekly_bars | safe }}</div>
+
+      <h2>Net do offshore vs net dos fundos</h2>
+      <div class="card">{{ offadj_net_vs_afp | safe }}</div>
+
+      <h2>Correlação com o spot</h2>
+      <div class="card">{{ offadj_corr | safe }}</div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- OFFSHORE -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-offshore" class="tab-content">
-        <div class="row">
-            <div class="panel panel-wide">{{ offshore_line | safe }}</div>
-            <div class="panel panel-narrow">{{ offshore_table | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ offshore_delta7 | safe }}</div>
-            <div class="panel">{{ offshore_delta28 | safe }}</div>
-        </div>
+    <!-- ══════════════════ CORPORATE ══════════════════ -->
+    <div id="tab-corporate" class="tab">
+      <h2>Posição e resumo</h2>
+      <p class="sub">Sinal cru do BCCh: acima de zero = compra de CLP (venda de USD).</p>
+      <div class="grid-wide">
+        <div class="card">{{ corporate_line | safe }}</div>
+        <div class="card">{{ corporate_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ corporate_delta7 | safe }}</div>
+        <div class="card">{{ corporate_delta28 | safe }}</div>
+      </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- OFFSHORE AJUSTADO -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-offadj" class="tab-content">
-        <div class="row">
-            <div class="panel panel-wide">{{ offadj_chart | safe }}</div>
-            <div class="panel panel-narrow">{{ offadj_table | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ offadj_delta7 | safe }}</div>
-            <div class="panel">{{ offadj_delta28 | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ offadj_weekly_bars | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ offadj_net_vs_afp | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel panel-wide">{{ offadj_corr | safe }}</div>
-        </div>
+    <!-- ══════════════════ POSIÇÃO DOS BANCOS ══════════════════ -->
+    <div id="tab-banks" class="tab">
+      <h2>Posição e resumo</h2>
+      <div class="grid-wide">
+        <div class="card">{{ banks_line | safe }}</div>
+        <div class="card">{{ banks_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ banks_delta7 | safe }}</div>
+        <div class="card">{{ banks_delta28 | safe }}</div>
+      </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- CORPORATE -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-corporate" class="tab-content">
-        <div class="row">
-            <div class="panel panel-wide">{{ corporate_line | safe }}</div>
-            <div class="panel panel-narrow">{{ corporate_table | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ corporate_delta7 | safe }}</div>
-            <div class="panel">{{ corporate_delta28 | safe }}</div>
-        </div>
+    <!-- ══════════════════ TOTAL VS USDCLP ══════════════════ -->
+    <div id="tab-total" class="tab">
+      <h2>Positioning (pensiones + offshore) vs USDCLP</h2>
+      <p class="sub">Eixo do USDCLP invertido, para que as duas linhas andem no mesmo sentido quando o
+        posicionamento explica o câmbio.</p>
+      <div class="card">{{ total_vs_usdclp | safe }}</div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- POSIÇÃO DOS BANCOS -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-banks" class="tab-content">
-        <div class="row">
-            <div class="panel panel-wide">{{ banks_line | safe }}</div>
-            <div class="panel panel-narrow">{{ banks_table | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ banks_delta7 | safe }}</div>
-            <div class="panel">{{ banks_delta28 | safe }}</div>
-        </div>
+    <!-- ══════════════════ FUNDOS + OFFSHORE ══════════════════ -->
+    <div id="tab-pensoff" class="tab">
+      <h2>Fondos de pensiones vs no residentes</h2>
+      <div class="card">{{ pension_offshore_dual | safe }}</div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- TOTAL VS USDCLP -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-total" class="tab-content">
-        <div class="row">
-            <div class="panel">{{ total_vs_usdclp | safe }}</div>
+    <!-- ══════════════════ TODOS OS SETORES ══════════════════ -->
+    <div id="tab-sectors" class="tab">
+      <h2>Net semanal por setor</h2>
+      <p class="sub">Convenção de <b>compra de USD</b>. Empilhado: os compradores de USD sobem e os
+        vendedores descem; a linha preta liga o net de cada semana.</p>
+      <div class="card">{{ sectors_net | safe }}</div>
+
+      <h2>Pernas: NDF e spot</h2>
+      <div class="card">{{ sectors_ndf | safe }}</div>
+      <div class="card">{{ sectors_spot | safe }}</div>
+
+      <h2>Tabelas por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ sectors_table_1 | safe }}</div>
+        <div class="card">{{ sectors_table_7 | safe }}</div>
+      </div>
+      <div class="grid2">
+        <div class="card">{{ sectors_table_28 | safe }}</div>
+        <div class="card">
+          <div class="note note-flush">
+            <b>Como ler.</b> Todas as colunas na mesma convenção: acima de zero =
+            <b>compra de USD</b> (venda de CLP), abaixo = venda de USD.
+            <b>Δ NDF</b> é a variação do saldo forward na janela; <b>Spot</b> é o
+            fluxo spot acumulado na janela; <b>Net</b> é a soma das duas.
+            <b>Saldo NDF</b> é o estoque no fim da janela, para dar o contexto de
+            tamanho.
+            <br><br>
+            <b>Atenção ao sinal.</b> Esta aba usa a convenção <b>invertida</b> em
+            relação à aba <i>Offshore Ajustado</i>, onde acima de zero é compra de CLP.
+            <br><br>
+            <b>A hierarquia fecha.</b> Os seis setores indentados somam
+            <b>Residentes no bancos</b>, e este mais <b>No residentes</b> soma o
+            <b>total</b> &mdash; verificado a cada build, diferença de 0,0. Os agregados
+            aparecem em negrito e não são setores: não some agregado com folha.
+            <br><br>
+            Todas as janelas fecham na mesma data, senão a linha de total não
+            fecharia. A janela de cada tabela está no subtítulo dela.
+          </div>
         </div>
+      </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- FUNDOS DE PENSÃO E OFFSHORE -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-pensoff" class="tab-content">
-        <div class="row">
-            <div class="panel">{{ pension_offshore_dual | safe }}</div>
-        </div>
+    <!-- ══════════════════ SWAP CÁMARA ══════════════════ -->
+    <div id="tab-swap" class="tab">
+      <h2>Deltas por participante</h2>
+      <p class="sub">Variação de DV01 (k) por horizonte, para offshore, locais ex-bancos e bancos locais.</p>
+      <div class="grid3">
+        <div class="card">{{ swap_table_ate2y | safe }}</div>
+        <div class="card">{{ swap_table_5y | safe }}</div>
+        <div class="card">{{ swap_table_10y | safe }}</div>
+      </div>
+
+      <h2>Buckets agregados</h2>
+      <div class="grid3">
+        <div class="card">{{ swap_chart_ate2y | safe }}</div>
+        <div class="card">{{ swap_chart_5y | safe }}</div>
+        <div class="card">{{ swap_chart_10y | safe }}</div>
+      </div>
+
+      <h2>Tenores individuais</h2>
+      <div class="grid3">
+        <div class="card">{{ swap_chart_3m | safe }}</div>
+        <div class="card">{{ swap_chart_6m | safe }}</div>
+        <div class="card">{{ swap_chart_9m | safe }}</div>
+      </div>
+      <div class="grid3">
+        <div class="card">{{ swap_chart_12m | safe }}</div>
+        <div class="card">{{ swap_chart_18m | safe }}</div>
+        <div class="card">{{ swap_chart_2y | safe }}</div>
+      </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- SWAP CAMARA -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- TODOS OS SETORES: NDF + SPOT -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-sectors" class="tab-content">
-        <div class="row">
-            <div class="panel">{{ sectors_net | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ sectors_ndf | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ sectors_spot | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ sectors_table_1 | safe }}</div>
-            <div class="panel">{{ sectors_table_7 | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ sectors_table_28 | safe }}</div>
-            <div class="panel">
-                <div class="note">
-                    <b>Como ler.</b> Todas as colunas na mesma convenção: acima de zero =
-                    <b>compra de USD</b> (venda de CLP), abaixo = venda de USD.
-                    <b>Δ NDF</b> é a variação do saldo forward na janela; <b>Spot</b> é o
-                    fluxo spot acumulado na janela; <b>Net</b> é a soma das duas.
-                    <b>Saldo NDF</b> é o estoque no fim da janela, para dar o contexto de
-                    tamanho.
-                    <br><br>
-                    <b>Atenção ao sinal.</b> Esta aba usa a convenção <b>invertida</b> em
-                    relação às abas <i>Fluxo AFP</i> e <i>Offshore Ajustado</i>, onde acima
-                    de zero é compra de CLP. Vale também para o saldo: os fundos de pensão
-                    aparecem aqui com saldo negativo (net short USD) e na aba deles com o
-                    sinal cru do BCCh, positivo.
-                    <br><br>
-                    <b>A hierarquia fecha.</b> Os seis setores indentados somam
-                    <b>Residentes no bancos</b>, e este mais <b>No residentes</b> soma o
-                    <b>total</b> — verificado a cada build, diferença de 0,0. Os agregados
-                    aparecem em negrito e não são setores: não some agregado com folha.
-                    <br><br>
-                    Todas as janelas fecham na mesma data, senão a linha de total não
-                    fecharia. A janela de cada tabela está no subtítulo dela.
-                </div>
-            </div>
-        </div>
+    <!-- ══════════════════ SALDOS FWD: USDCOP ══════════════════ -->
+    <div id="tab-colombia" class="tab">
+      <h2>Saldos forward e resumo</h2>
+      <div class="grid-wide">
+        <div class="card">{{ colombia_line | safe }}</div>
+        <div class="card">{{ colombia_table | safe }}</div>
+      </div>
+
+      <h2>Variação por janela</h2>
+      <div class="grid2">
+        <div class="card">{{ colombia_delta7 | safe }}</div>
+        <div class="card">{{ colombia_delta28 | safe }}</div>
+      </div>
     </div>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-swap" class="tab-content">
-        <!-- Delta tables -->
-        <div class="swap-tables-row">
-            <div class="swap-table-panel">{{ swap_table_ate2y | safe }}</div>
-            <div class="swap-table-panel">{{ swap_table_5y | safe }}</div>
-            <div class="swap-table-panel">{{ swap_table_10y | safe }}</div>
-        </div>
-        <!-- Main tenor charts: ate2y, 5y, 10y -->
-        <div class="swap-charts-row">
-            <div class="swap-chart-panel">{{ swap_chart_ate2y | safe }}</div>
-            <div class="swap-chart-panel">{{ swap_chart_5y | safe }}</div>
-            <div class="swap-chart-panel">{{ swap_chart_10y | safe }}</div>
-        </div>
-        <!-- Individual tenors: 3m, 6m, 9m -->
-        <div class="swap-charts-row">
-            <div class="swap-chart-panel">{{ swap_chart_3m | safe }}</div>
-            <div class="swap-chart-panel">{{ swap_chart_6m | safe }}</div>
-            <div class="swap-chart-panel">{{ swap_chart_9m | safe }}</div>
-        </div>
-        <!-- Individual tenors: 12m, 18m, 2y -->
-        <div class="swap-charts-row">
-            <div class="swap-chart-panel">{{ swap_chart_12m | safe }}</div>
-            <div class="swap-chart-panel">{{ swap_chart_18m | safe }}</div>
-            <div class="swap-chart-panel">{{ swap_chart_2y | safe }}</div>
-        </div>
-    </div>
+    <footer class="page-footer">
+      <span class="credits"><strong>JGP</strong> Emerging Markets &middot; Painel FX Positioning</span>
+      <span>Gerado em {{ build_timestamp }}</span>
+    </footer>
+  </main>
+</div>
 
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- SALDOS FWD: USDCOP -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-colombia" class="tab-content">
-        <div class="row">
-            <div class="panel panel-wide">{{ colombia_line | safe }}</div>
-            <div class="panel panel-narrow">{{ colombia_table | safe }}</div>
-        </div>
-        <div class="row">
-            <div class="panel">{{ colombia_delta7 | safe }}</div>
-            <div class="panel">{{ colombia_delta28 | safe }}</div>
-        </div>
-    </div>
+<button class="back-to-top" id="backToTop"><span class="arrow">&uarr;</span><span>TOP</span></button>
 
-    <div class="footer">
-        Painel FX Positioning &mdash; JGP Emerging Markets &mdash; Gerado em {{ build_timestamp }}
-    </div>
+<script>
+/* =====================================================================
+   chrome.js — casca editorial JGP (variante dashboard / abas)
+   Requer no HTML:
+     <div class="scroll-progress" id="scrollProgress"></div>
+     <nav class="topnav">…</nav>
+     <nav class="tabbar" id="tabs"><button class="tabbtn on" data-tab="X">…</button>…</nav>
+     <div class="page-wrapper">
+       <nav class="sidebar" id="sidebar"><div class="sidebar-eyebrow">Sumário</div></nav>
+       <main class="main-content">
+         <header class="page-header">…</header>
+         <div id="tab-X" class="tab on">…<h2>Seção</h2>…</div> …
+       </main>
+     </div>
+     <button class="back-to-top" id="backToTop"><span class="arrow">↑</span><span>TOP</span></button>
 
-    <script>
-        function showTab(name) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById('tab-' + name).classList.add('active');
-            event.currentTarget.classList.add('active');
-            // Trigger Plotly resize for newly visible charts
-            setTimeout(() => {
-                window.dispatchEvent(new Event('resize'));
-            }, 50);
-        }
-    </script>
+   A sidebar é gerada a partir dos <h2> da aba ativa (padrão Fiscal: só o
+   grupo da aba ativa aparece). Chame JGPChrome.init({onTab}) uma vez.
+   `onTab(tabId)` é opcional — use para (re)desenhar gráficos ao abrir a aba.
+   ===================================================================== */
+window.JGPChrome = (function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  let cfg = {};
+
+  function tabButtons() { return [].slice.call(document.querySelectorAll('#tabs .tabbtn')); }
+  function activeTab() {
+    const b = tabButtons().find(b => b.classList.contains('on'));
+    return b ? b.dataset.tab : (tabButtons()[0] && tabButtons()[0].dataset.tab);
+  }
+
+  function showTab(id) {
+    tabButtons().forEach(b => b.classList.toggle('on', b.dataset.tab === id));
+    document.querySelectorAll('.tab').forEach(p => p.classList.toggle('on', p.id === 'tab-' + id));
+    buildSidebar();
+    window.scrollTo({ top: 0 });
+    if (typeof cfg.onTab === 'function') cfg.onTab(id);
+  }
+
+  function buildSidebar() {
+    const sidebar = $('#sidebar'); if (!sidebar) return;
+    const at = activeTab();
+    sidebar.querySelectorAll('.sidebar-chapter,.sidebar-link').forEach(e => e.remove());
+    const btn = tabButtons().find(b => b.dataset.tab === at);
+    if (btn) {
+      const ch = document.createElement('a');
+      ch.className = 'sidebar-chapter active'; ch.href = '#';
+      ch.innerHTML = '<span class="name">' + btn.textContent.trim() + '</span>';
+      ch.addEventListener('click', e => { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+      sidebar.appendChild(ch);
+    }
+    const pane = document.getElementById('tab-' + at);
+    [].slice.call(pane ? pane.querySelectorAll('h2') : []).forEach((h, i) => {
+      if (!h.id) h.id = 'sec-' + at + '-' + i;
+      const a = document.createElement('a');
+      a.className = 'sidebar-link'; a.href = '#' + h.id;
+      const txt = (h.textContent || '').replace(/\s+/g, ' ').trim();
+      a.title = txt;
+      a.innerHTML = '<span>' + txt + '</span><span class="item-num">' + String(i + 1).padStart(2, '0') + '</span>';
+      a.addEventListener('click', e => { e.preventDefault(); document.getElementById(h.id).scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      sidebar.appendChild(a);
+    });
+    updateSpy();
+  }
+
+  function updateSpy() {
+    const links = [].slice.call(document.querySelectorAll('#sidebar .sidebar-link'));
+    if (!links.length) return;
+    let cur = '';
+    links.forEach(l => { const el = document.getElementById(l.getAttribute('href').slice(1));
+      if (el && el.getBoundingClientRect().top - 120 <= 0) cur = l.getAttribute('href').slice(1); });
+    links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + cur));
+  }
+
+  function updateProgress() {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    document.documentElement.style.setProperty('--scroll-progress', (max > 0 ? Math.min(100, window.scrollY / max * 100) : 0) + '%');
+  }
+
+  function init(options) {
+    cfg = options || {};
+    const backTop = $('#backToTop');
+    // Botão de ocultar/mostrar o sumário (sidebar); estado persistido em localStorage.
+    const wrapper = $('.page-wrapper'), navToggle = $('#navToggle');
+    if (wrapper && navToggle) {
+      const key = 'jgp-nav-collapsed';
+      const applyNav = c => {
+        wrapper.classList.toggle('nav-collapsed', c);
+        navToggle.setAttribute('aria-expanded', String(!c));
+        navToggle.title = c ? 'Mostrar sumário' : 'Ocultar sumário';
+        updateProgress();
+        window.dispatchEvent(new Event('resize'));
+      };
+      let col = false; try { col = localStorage.getItem(key) === '1'; } catch (e) {}
+      applyNav(col);
+      navToggle.addEventListener('click', () => {
+        const c = !wrapper.classList.contains('nav-collapsed');
+        applyNav(c); try { localStorage.setItem(key, c ? '1' : '0'); } catch (e) {}
+      });
+    }
+    tabButtons().forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+    window.addEventListener('scroll', () => {
+      updateProgress(); updateSpy();
+      if (backTop) backTop.classList.toggle('visible', window.scrollY > 350);
+    }, { passive: true });
+    window.addEventListener('resize', updateProgress, { passive: true });
+    if (backTop) backTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    buildSidebar(); updateProgress();
+    if (typeof cfg.onTab === 'function') cfg.onTab(activeTab());
+  }
+
+  return { init, showTab, buildSidebar, activeTab };
+})();
+
+
+/* =====================================================================
+   Camada do painel sobre a casca.
+
+   Os graficos sao renderizados no build, pelo Python (plotly to_html), e nao
+   pelo JS: eles chegam com as cores do template "jgp" do chart_builder.py, que
+   sao as do modo claro. Duas consequencias tratadas aqui:
+
+   Dark mode — a casca troca os tokens CSS sozinha, mas o SVG ja desenhado nao.
+   `retema()` le os tokens --chart-* e faz um Plotly.relayout em cada figura,
+   incluindo as anotacoes de convencao de sinal e as linhas de zero (add_hline
+   vira shape com cor preta fixa).
+
+   A altura fica como veio do Python. Escalar por innerHeight foi testado e
+   descartado: o relayout muda o SVG mas nao o .card, e o eixo X vazava por cima
+   da secao seguinte. A largura, que era o ganho de tela que importava, ja vem
+   do container de 1840px da casca.
+   ===================================================================== */
+(function () {
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  var tok = function (n) { return getComputedStyle(document.body).getPropertyValue(n).trim(); };
+  var plots = function () { return [].slice.call(document.querySelectorAll('.js-plotly-plot')); };
+
+  function retema() {
+    if (typeof Plotly === 'undefined') return;
+    var ink = tok('--chart-title'), tick = tok('--chart-legend'),
+        grid = tok('--chart-grid'), axis = tok('--chart-axis'),
+        fundo = mq.matches ? 'rgba(26,26,25,.82)' : 'rgba(255,255,255,.78)';
+
+    plots().forEach(function (gd) {
+      var L = gd.layout || {};
+      var up = {
+        'font.color': ink, 'title.font.color': ink,
+        'xaxis.linecolor': axis, 'xaxis.tickcolor': axis, 'xaxis.tickfont.color': tick,
+        'yaxis.linecolor': axis, 'yaxis.tickcolor': axis, 'yaxis.tickfont.color': tick,
+        'yaxis.gridcolor': grid, 'legend.font.color': tick
+      };
+      if (L.yaxis2) {
+        up['yaxis2.linecolor'] = axis; up['yaxis2.tickcolor'] = axis;
+        up['yaxis2.tickfont.color'] = tick; up['yaxis2.gridcolor'] = grid;
+      }
+      (L.annotations || []).forEach(function (a, i) {
+        if (a.bgcolor) up['annotations[' + i + '].bgcolor'] = fundo;
+      });
+      (L.shapes || []).forEach(function (s, i) {
+        var c = s.line && s.line.color;
+        if (c === 'black' || c === '#000' || c === '#000000') up['shapes[' + i + '].line.color'] = axis;
+      });
+      try { Plotly.relayout(gd, up); } catch (e) {}
+    });
+  }
+
+  // As figuras vem sem config.responsive, entao o reflow e explicito.
+  function reflow() {
+    if (typeof Plotly === 'undefined') return;
+    plots().forEach(function (gd) { try { Plotly.Plots.resize(gd); } catch (e) {} });
+  }
+
+  var pend;
+  function agenda() { clearTimeout(pend); pend = setTimeout(function () { reflow(); retema(); }, 80); }
+
+  window.addEventListener('resize', agenda, { passive: true });
+  if (mq.addEventListener) mq.addEventListener('change', retema);
+  else if (mq.addListener) mq.addListener(retema);
+
+  JGPChrome.init({
+    // Abas escondidas tem largura zero: a figura so mede certo quando aparece.
+    onTab: function () { setTimeout(function () { reflow(); retema(); }, 30); }
+  });
+
+  reflow();
+  retema();
+})();
+
+</script>
 </body>
 </html>

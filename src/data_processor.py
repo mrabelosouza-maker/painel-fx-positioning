@@ -64,18 +64,29 @@ def build_fx_dados() -> pd.DataFrame:
 
 def compute_deltas(
     df: pd.DataFrame, col: str, lags: list[int] = None,
-    date_col: str = "Data",
+    date_col: str = "Data", sessions: bool = False,
 ) -> pd.DataFrame:
     """Adiciona colunas de delta baseadas em dias corridos.
 
     Para cada lag N, busca o valor do dia util mais proximo a (data - N dias).
     Assim, delta_1d na segunda-feira compara com sexta-feira,
     delta_7d compara com 7 dias corridos atras (dia util mais proximo), etc.
+
+    Com `sessions=True` o lag conta PREGOES, nao dias corridos: como o df ja vem
+    so com dia util (fim de semana e feriado caem no dropna de build_fx_data),
+    diff(N) anda exatamente N sessoes. Mesma convencao de AFP_DELTA_SESSIONS na
+    aba de fluxo AFP. Dias corridos dariam janela erratica: 5 dias corridos
+    cobrem 3 pregoes na segunda e 5 so na sexta.
     """
     if lags is None:
         lags = [1, 7, 28]
     result = df.copy()
     result = result.sort_values(date_col).reset_index(drop=True)
+
+    if sessions:
+        for lag in lags:
+            result[f"delta_{lag}d"] = result[col].diff(lag)
+        return result
 
     # Indexar por data para lookup rapido
     date_series = result[date_col]

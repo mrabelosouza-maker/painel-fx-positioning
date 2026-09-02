@@ -1,7 +1,62 @@
 """Construcao de graficos Plotly. Cada funcao retorna HTML embeddable."""
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
 import pandas as pd
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Tema JGP (casca editorial analise_html)
+# ──────────────────────────────────────────────────────────────────────
+# PALETTE_JGP na ordem canonica, igual aos tokens --s1..--d3 do dashboard.css.
+# Semantica: verde = serie principal · preto = secundaria · cinza = neutro ·
+# azul = alternativa · verde-claro = projecao · azul-claro = ano anterior ·
+# laranja = alerta moderado · vermelho = alerta forte. Cor por SIGNIFICADO,
+# nao por ordem de indice.
+JGP_VERDE = "#00B050"
+JGP_PRETO = "#1F1F1F"
+JGP_CINZA = "#7F7F7F"
+JGP_AZUL = "#0070C0"
+JGP_VERDE_CLARO = "#92D050"
+JGP_AZUL_CLARO = "#00B0F0"
+JGP_LARANJA = "#FFA500"
+JGP_VERMELHO = "#E63946"
+
+PALETTE_JGP = [
+    JGP_VERDE, JGP_PRETO, JGP_CINZA, JGP_AZUL,
+    JGP_VERDE_CLARO, JGP_AZUL_CLARO, JGP_LARANJA, JGP_VERMELHO,
+]
+
+JGP_FONT = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+
+# Fundo transparente: quem pinta e o .card da casca, entao o grafico acompanha
+# o papel creme no claro e a superficie escura no dark sem precisar redesenhar.
+# Grade so na horizontal, espinhas pretas, titulo 14 bold — o mesmo desenho do
+# funcoes_graficas_jgp/tema.py, portado para o Plotly.
+pio.templates["jgp"] = go.layout.Template(layout=dict(
+    font=dict(family=JGP_FONT, size=12, color=JGP_PRETO),
+    title=dict(font=dict(family=JGP_FONT, size=14, color=JGP_PRETO),
+               x=0.005, xanchor="left", xref="container", yref="container",
+               y=0.98, yanchor="top"),
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    colorway=PALETTE_JGP,
+    xaxis=dict(
+        showgrid=False, zeroline=False,
+        linecolor="#000000", linewidth=1, showline=True, mirror=False,
+        ticks="outside", tickcolor="#000000", ticklen=4,
+        tickfont=dict(family=JGP_FONT, size=10, color="#4D4D4D"),
+    ),
+    yaxis=dict(
+        showgrid=True, gridcolor="#EBEBEB", gridwidth=1, zeroline=False,
+        linecolor="#000000", linewidth=1, showline=True, mirror=False,
+        ticks="outside", tickcolor="#000000", ticklen=4,
+        tickfont=dict(family=JGP_FONT, size=10, color="#4D4D4D"),
+    ),
+    legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)",
+                font=dict(family=JGP_FONT, size=11, color="#4D4D4D")),
+    hoverlabel=dict(font=dict(family=JGP_FONT, size=11)),
+))
 
 
 def _to_html(fig: go.Figure) -> str:
@@ -30,7 +85,8 @@ def make_line_chart(
     x: str,
     y: str,
     title: str,
-    color: str = "dodgerblue",
+    color: str = JGP_VERDE,
+    usd_labels: bool = False,
 ) -> str:
     plot_df = df.dropna(subset=[x, y]).copy()
     x_str = _date_strings(plot_df[x])
@@ -43,10 +99,12 @@ def make_line_chart(
     ))
     fig.update_layout(
         title=title, xaxis_title="", yaxis_title="USD million",
-        template="plotly_white", height=400, margin=dict(l=50, r=20, t=50, b=60),
+        template="jgp", height=400, margin=dict(l=50, r=20, t=50, b=60),
         showlegend=False,
     )
     fig.add_hline(y=0, line_dash="solid", line_color="black", line_width=0.5)
+    if usd_labels:
+        _usd_side_labels(fig)
     _apply_category_xaxis(fig)
     return _to_html(fig)
 
@@ -56,8 +114,9 @@ def make_bar_chart(
     x: str,
     y: str,
     title: str,
-    color: str = "dodgerblue",
+    color: str = JGP_VERDE,
     date_filter: str = "2024-01-01",
+    usd_labels: bool = False,
 ) -> str:
     filtered = df[df[x] >= date_filter].copy() if date_filter else df.copy()
     filtered = filtered.dropna(subset=[x, y])
@@ -70,10 +129,12 @@ def make_bar_chart(
     ))
     fig.update_layout(
         title=title, xaxis_title="", yaxis_title="USD million",
-        template="plotly_white", height=350, margin=dict(l=50, r=20, t=50, b=60),
+        template="jgp", height=350, margin=dict(l=50, r=20, t=50, b=60),
         showlegend=False,
     )
     fig.add_hline(y=0, line_dash="solid", line_color="black", line_width=0.5)
+    if usd_labels:
+        _usd_side_labels(fig)
     _apply_category_xaxis(fig, nticks=12)
     return _to_html(fig)
 
@@ -89,7 +150,7 @@ def make_dual_axis_chart(
     title: str,
     y1_name: str = "Positioning",
     y2_name: str = "USDCLP",
-    y1_color: str = "dodgerblue",
+    y1_color: str = JGP_VERDE,
     y2_color: str = "red",
     invert_y2: bool = True,
     annotations: list = None,
@@ -109,7 +170,7 @@ def make_dual_axis_chart(
         secondary_y=True,
     )
     fig.update_layout(
-        title=title, template="plotly_white", height=500,
+        title=title, template="jgp", height=500,
         margin=dict(l=60, r=60, t=50, b=60),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
@@ -146,7 +207,7 @@ def make_dual_series_chart(
     title: str,
     y1_name: str = "Fondos de Pensiones",
     y2_name: str = "No Residentes",
-    y1_color: str = "dodgerblue",
+    y1_color: str = JGP_VERDE,
     y2_color: str = "darkorange",
 ) -> str:
     plot_df = df.dropna(subset=[x, y1, y2]).copy()
@@ -164,7 +225,7 @@ def make_dual_series_chart(
         secondary_y=True,
     )
     fig.update_layout(
-        title=title, template="plotly_white", height=500,
+        title=title, template="jgp", height=500,
         margin=dict(l=60, r=60, t=50, b=60),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
@@ -186,9 +247,9 @@ def make_offshore_corr_chart(corr_df: pd.DataFrame, title: str) -> str:
     fig = go.Figure()
     # rampa ordinal: janela mais curta clara, mais longa escura
     for col, color, width in [
-        ("corr_15d", "#86b6ef", 1.2),
-        ("corr_30d", "#2a78d6", 1.6),
-        ("corr_90d", "#104281", 2.2),
+        ("corr_15d", JGP_AZUL_CLARO, 1.2),
+        ("corr_30d", JGP_AZUL, 1.6),
+        ("corr_90d", "#004A80", 2.2),
     ]:
         if col not in corr_df.columns:
             continue
@@ -207,12 +268,12 @@ def make_offshore_corr_chart(corr_df: pd.DataFrame, title: str) -> str:
     ]:
         fig.add_annotation(
             xref="paper", x=0.01, y=y, yref="y", text=text, showarrow=False,
-            font=dict(color="dimgray", size=10), xanchor="left", yanchor=anchor,
+            font=dict(color=JGP_CINZA, size=10), xanchor="left", yanchor=anchor,
             bgcolor="rgba(255,255,255,0.75)",
         )
 
     fig.update_layout(
-        title=title, template="plotly_white", height=420,
+        title=title, template="jgp", height=420,
         margin=dict(l=60, r=20, t=50, b=70),
         yaxis_title="correlação entre as pernas",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -251,15 +312,15 @@ def make_swap_line_chart(
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=x_str, y=plot_df[col_off], name="Offshore",
-        line=dict(width=2, color="#1f77b4"),
+        line=dict(width=2, color=JGP_VERDE),
     ))
     fig.add_trace(go.Scatter(
         x=x_str, y=plot_df[col_loc], name="Local Ex Banks",
-        line=dict(width=2, color="#ff7f0e"),
+        line=dict(width=2, color=JGP_AZUL),
     ))
     fig.add_trace(go.Scatter(
         x=x_str, y=-plot_df[col_total], name="Local Banks",
-        line=dict(width=2, color="#2ca02c"),
+        line=dict(width=2, color=JGP_LARANJA),
     ))
     fig.add_hline(y=0, line_color="black", line_width=0.5)
 
@@ -269,21 +330,21 @@ def make_swap_line_chart(
 
     fig.add_annotation(
         x=x_str[0], y=y_min * 1.1 if y_min < 0 else y_min - abs(y_max) * 0.1,
-        text="Tomado", showarrow=False, font=dict(color="red", size=10),
+        text="Tomado", showarrow=False, font=dict(color=JGP_VERMELHO, size=10),
     )
     fig.add_annotation(
         x=x_str[0], y=y_max * 1.1 if y_max > 0 else y_max + abs(y_min) * 0.1,
-        text="Aplicado", showarrow=False, font=dict(color="blue", size=10),
+        text="Aplicado", showarrow=False, font=dict(color=JGP_AZUL, size=10),
     )
 
     fig.update_layout(
         title=dict(text=title, font=dict(size=12)),
-        template="plotly_white",
+        template="jgp",
         height=380,
-        margin=dict(l=50, r=15, t=40, b=55),
+        margin=dict(l=50, r=15, t=44, b=96),
         yaxis_title="DV01",
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.0, xanchor="center", x=0.5,
+            orientation="h", yanchor="top", y=-0.30, xanchor="left", x=0,
             font=dict(size=9),
         ),
     )
@@ -302,10 +363,10 @@ def make_swap_delta_bars(
     fig = go.Figure()
     fig.add_trace(go.Bar(
         y=labels, x=values, orientation="h",
-        marker_color="darkblue",
+        marker_color=JGP_AZUL,
     ))
     fig.update_layout(
-        title=title, template="plotly_white", height=280,
+        title=title, template="jgp", height=280,
         margin=dict(l=100, r=20, t=50, b=40),
         xaxis_title="DV01", yaxis_title="",
         showlegend=False,
@@ -328,9 +389,9 @@ def make_colombia_line_chart(
 
     fig = go.Figure()
     for col, color in [
-        ("Extranjero", "dodgerblue"),
-        ("FPC", "darkorange"),
-        ("RestoyReal", "green"),
+        ("Extranjero", JGP_VERDE),
+        ("FPC", JGP_AZUL),
+        ("RestoyReal", JGP_LARANJA),
     ]:
         if col in filtered.columns:
             fig.add_trace(go.Scatter(
@@ -340,7 +401,7 @@ def make_colombia_line_chart(
     fig.add_hline(y=0, line_color="black", line_width=0.5)
     fig.update_layout(
         title="Saldos de compra e venda de contratos fwd (USD million)",
-        template="plotly_white", height=400,
+        template="jgp", height=400,
         margin=dict(l=50, r=20, t=50, b=60),
         yaxis_title="USD million",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -354,8 +415,8 @@ def make_colombia_line_chart(
 # ──────────────────────────────────────────────────────────────────────
 # Cores fixas das duas pernas, usadas em todos os graficos da aba.
 AFP_LEG_COLORS = {
-    "ndf": "dodgerblue",
-    "bcch": "#6b7280",
+    "ndf": JGP_VERDE,
+    "bcch": JGP_AZUL,
 }
 
 
@@ -368,8 +429,8 @@ def _side_labels(fig: go.Figure, topo: str, pe: str) -> None:
     saiam de vista assim que a escala mudava.
     """
     for y, anchor, text, color in [
-        (0.97, "top", topo, "green"),
-        (0.03, "bottom", pe, "red"),
+        (0.97, "top", topo, JGP_VERDE),
+        (0.03, "bottom", pe, JGP_VERMELHO),
     ]:
         fig.add_annotation(
             xref="paper", x=0.01, y=y, yref="paper", text=text, showarrow=False,
@@ -388,7 +449,7 @@ def _clp_side_labels(fig: go.Figure) -> None:
 
 
 def _usd_side_labels(fig: go.Figure) -> None:
-    """Convencao da aba de setores: + = compra de USD. Invertida das outras."""
+    """Convencao das abas de setores e de fundos de pensao: + = compra de USD."""
     _side_labels(
         fig,
         "▲ acima de zero: comprando USD (vendendo CLP)",
@@ -437,7 +498,7 @@ def make_afp_5d_bars(legs: dict) -> str:
             "FUNDOS DE PENSÃO: 5 PREGÕES — NDF vs SPOT "
             f"<span style='font-size:13px;color:#666'>({janela})</span>"
         ),
-        template="plotly_white", height=460,
+        template="jgp", height=460,
         margin=dict(l=60, r=20, t=70, b=80),
         yaxis_title="USD million acumulado",
         showlegend=False, bargap=0.45,
@@ -492,7 +553,7 @@ def make_weekly_legs_bars(
         title=title,
         barmode="relative" if stacked else "group",
         bargap=0.2 if stacked else 0.25, bargroupgap=0.05,
-        template="plotly_white", height=440,
+        template="jgp", height=440,
         margin=dict(l=60, r=20, t=50, b=70),
         yaxis_title=f"USD million (+ compra de {'USD' if usd else 'CLP'})",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -542,7 +603,7 @@ def make_afp_level_line(afp_df: pd.DataFrame, title: str) -> str:
     ))
     fig.add_hline(y=0, line_color="black", line_width=0.5)
     fig.update_layout(
-        title=title, template="plotly_white", height=400,
+        title=title, template="jgp", height=400,
         margin=dict(l=60, r=20, t=50, b=60),
         yaxis_title="USD million (+ AFP long USD)",
         showlegend=False,
@@ -566,7 +627,7 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
 
     lim = d[col].abs().max() * 1.25
     fig.update_layout(
-        title=title, template="plotly_white", height=400,
+        title=title, template="jgp", height=400,
         margin=dict(l=60, r=20, t=50, b=60),
         yaxis_title="USD million (+ compra de USD)",
         showlegend=False,
@@ -606,7 +667,7 @@ def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
     fig.add_hline(y=0, line_color="black", line_width=0.8)
 
     fig.update_layout(
-        title=title, template="plotly_white", height=440,
+        title=title, template="jgp", height=440,
         margin=dict(l=60, r=20, t=50, b=70),
         yaxis_title="USD million (+ compra de CLP)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
@@ -690,7 +751,7 @@ def make_sector_weekly_stacked(
 
     fig.update_layout(
         title=title, barmode="relative", bargap=0.2,
-        template="plotly_white", height=560,
+        template="jgp", height=560,
         margin=dict(l=60, r=20, t=50, b=170),
         yaxis_title="USD million (+ compra de USD)",
         # A legenda tem oito entradas e quebra em duas linhas. Empurrada para
@@ -772,7 +833,7 @@ def make_afp_levels_chart(
         )
 
     fig.update_layout(
-        title=title, template="plotly_white", height=470,
+        title=title, template="jgp", height=470,
         margin=dict(l=70, r=20, t=82, b=70),
         yaxis_title="USD million desde a âncora (+ compra de USD)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
