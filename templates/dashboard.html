@@ -428,16 +428,18 @@
 
       <h2>Variação por janela</h2>
       <div class="grid2">
-        <div class="card">{{ offshore_delta7 | safe }}</div>
-        <div class="card">{{ offshore_delta28 | safe }}</div>
+        <div class="card">{{ offshore_delta5 | safe }}</div>
+        <div class="card">{{ offshore_delta21 | safe }}</div>
       </div>
     </div>
 
     <!-- ══════════════════ OFFSHORE AJUSTADO ══════════════════ -->
     <div id="tab-offadj" class="tab">
       <h2>Posição ajustada e resumo</h2>
-      <p class="sub">Convenção de <b>compra de CLP</b>: acima de zero = comprando CLP (vendendo USD).
-        Invertida em relação às abas de Fundos de Pensão, Fluxo AFP e Todos os Setores.</p>
+      <p class="sub">Convenção de <b>compra de USD</b> em toda a aba: acima de zero = comprando USD
+        (vendendo CLP), abaixo de zero = vendendo USD. Mesma das abas de Fundos de Pensão, Offshore,
+        Fluxo AFP e Todos os Setores. O gráfico abre em jan/2025 com os eixos padronizados na janela
+        visível &mdash; zoom-out ou duplo-clique devolve a amostra inteira, com os eixos reajustados.</p>
       <div class="grid-wide">
         <div class="card">{{ offadj_chart | safe }}</div>
         <div class="card">{{ offadj_table | safe }}</div>
@@ -445,8 +447,8 @@
 
       <h2>Variação por janela</h2>
       <div class="grid2">
-        <div class="card">{{ offadj_delta7 | safe }}</div>
-        <div class="card">{{ offadj_delta28 | safe }}</div>
+        <div class="card">{{ offadj_delta5 | safe }}</div>
+        <div class="card">{{ offadj_delta21 | safe }}</div>
       </div>
 
       <h2>Fluxo semanal por perna</h2>
@@ -470,8 +472,8 @@
 
       <h2>Variação por janela</h2>
       <div class="grid2">
-        <div class="card">{{ corporate_delta7 | safe }}</div>
-        <div class="card">{{ corporate_delta28 | safe }}</div>
+        <div class="card">{{ corporate_delta5 | safe }}</div>
+        <div class="card">{{ corporate_delta21 | safe }}</div>
       </div>
     </div>
 
@@ -485,8 +487,8 @@
 
       <h2>Variação por janela</h2>
       <div class="grid2">
-        <div class="card">{{ banks_delta7 | safe }}</div>
-        <div class="card">{{ banks_delta28 | safe }}</div>
+        <div class="card">{{ banks_delta5 | safe }}</div>
+        <div class="card">{{ banks_delta21 | safe }}</div>
       </div>
     </div>
 
@@ -518,10 +520,10 @@
       <h2>Tabelas por janela</h2>
       <div class="grid2">
         <div class="card">{{ sectors_table_1 | safe }}</div>
-        <div class="card">{{ sectors_table_7 | safe }}</div>
+        <div class="card">{{ sectors_table_5 | safe }}</div>
       </div>
       <div class="grid2">
-        <div class="card">{{ sectors_table_28 | safe }}</div>
+        <div class="card">{{ sectors_table_21 | safe }}</div>
         <div class="card">
           <div class="note note-flush">
             <b>Como ler.</b> Todas as colunas na mesma convenção: acima de zero =
@@ -539,7 +541,10 @@
             <b>total</b> &mdash; verificado a cada build, diferença de 0,0. Os agregados
             aparecem em negrito e não são setores: não some agregado com folha.
             <br><br>
-            Todas as janelas fecham na mesma data, senão a linha de total não
+            <b>Janelas em pregões.</b> 1, 5 e 21 <b>pregões</b>, não dias corridos:
+            a janela pega as N últimas datas com dado, então tem sempre o mesmo
+            número de sessões, independente de feriado ou do dia da semana em que
+            o build roda. Todas fecham na mesma data, senão a linha de total não
             fecharia. A janela de cada tabela está no subtítulo dela.
           </div>
         </div>
@@ -549,7 +554,8 @@
     <!-- ══════════════════ SWAP CÁMARA ══════════════════ -->
     <div id="tab-swap" class="tab">
       <h2>Deltas por participante</h2>
-      <p class="sub">Variação de DV01 (k) por horizonte, para offshore, locais ex-bancos e bancos locais.</p>
+      <p class="sub">Variação de DV01 (k) por horizonte, para offshore, locais ex-bancos e bancos locais.
+        Horizontes em <b>pregões</b>, não em dias corridos: 1, 5, 21, 32 e 63 sessões.</p>
       <div class="grid3">
         <div class="card">{{ swap_table_ate2y | safe }}</div>
         <div class="card">{{ swap_table_5y | safe }}</div>
@@ -586,8 +592,8 @@
 
       <h2>Variação por janela</h2>
       <div class="grid2">
-        <div class="card">{{ colombia_delta7 | safe }}</div>
-        <div class="card">{{ colombia_delta28 | safe }}</div>
+        <div class="card">{{ colombia_delta5 | safe }}</div>
+        <div class="card">{{ colombia_delta21 | safe }}</div>
       </div>
     </div>
 

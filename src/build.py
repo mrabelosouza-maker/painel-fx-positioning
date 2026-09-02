@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import SECTOR_WINDOWS
+from config import SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
@@ -36,8 +36,7 @@ from chart_builder import (
     make_sector_weekly_stacked,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
-    JGP_VERDE,
-    JGP_VERMELHO,
+    JGP_AZUL,
     make_afp_5d_bars,
     make_afp_daily_bars,
     make_afp_level_line,
@@ -61,10 +60,13 @@ def build_fx_section(dados):
     """Gera charts e tables para as 4 secoes FX padrao + dual-axis."""
     ctx = {}
 
+    # Todas as abas em PREGOES (1, 5 e 21 sessoes), nao em dias corridos: a
+    # janela de dias corridos era erratica (5 corridos cobrem 3 pregoes na
+    # segunda e 5 so na sexta) e cada aba mediria um horizonte diferente.
     fx_labels = {
         "delta_1d": "Delta 1D",
-        "delta_7d": "Delta 7D",
-        "delta_28d": "Delta 28D",
+        "delta_5d": "Delta 5D",
+        "delta_21d": "Delta 21D",
         "pct_usdclp": "% USDCLP",
     }
 
@@ -86,12 +88,6 @@ def build_fx_section(dados):
     df_pension = _add_pct_usdclp(
         compute_deltas(dados_pension, col, [1, 5, 21], sessions=True)
     )
-    pension_labels = {
-        "delta_1d": "Delta 1D",
-        "delta_5d": "Delta 5D",
-        "delta_21d": "Delta 21D",
-        "pct_usdclp": "% USDCLP",
-    }
     ctx["pension_line"] = make_line_chart(
         dados_pension, "Data", col,
         "Fondos de Pensiones: Posição em USD (USD million)",
@@ -99,7 +95,7 @@ def build_fx_section(dados):
     )
     ctx["pension_table"] = make_summary_table(
         df_pension, [col, "delta_1d", "delta_5d", "pct_usdclp"],
-        col_labels={col: "Nivel", **pension_labels}, decimals=1,
+        col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
     ctx["pension_delta5"] = make_bar_chart(
         df_pension, "Data", "delta_5d",
@@ -114,36 +110,54 @@ def build_fx_section(dados):
 
     # ── OFFSHORE ──
     col = "No residentes"
-    df_off = _add_pct_usdclp(compute_deltas(dados, col, [1, 7, 28]))
+    df_off = _add_pct_usdclp(compute_deltas(dados, col, [1, 5, 21], sessions=True))
     ctx["offshore_line"] = make_line_chart(dados, "Data", col, "No Residentes (Offshore): Net Short (USD million)")
     ctx["offshore_table"] = make_summary_table(
-        df_off, [col, "delta_1d", "delta_7d", "pct_usdclp"],
+        df_off, [col, "delta_1d", "delta_5d", "pct_usdclp"],
         col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
-    ctx["offshore_delta7"] = make_bar_chart(df_off, "Data", "delta_7d", "DELTA 7 DIAS: No Residentes (USD million)")
-    ctx["offshore_delta28"] = make_bar_chart(df_off, "Data", "delta_28d", "DELTA 28 DIAS: No Residentes (USD million)")
+    ctx["offshore_delta5"] = make_bar_chart(
+        df_off, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: No Residentes (USD million)",
+    )
+    ctx["offshore_delta21"] = make_bar_chart(
+        df_off, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: No Residentes (USD million)",
+    )
 
     # ── CORPORATE ──
     col = "Empresas sector real"
-    df_corp = _add_pct_usdclp(compute_deltas(dados, col, [1, 7, 28]))
+    df_corp = _add_pct_usdclp(compute_deltas(dados, col, [1, 5, 21], sessions=True))
     ctx["corporate_line"] = make_line_chart(dados, "Data", col, "Empresas Sector Real: Net Short (USD million)")
     ctx["corporate_table"] = make_summary_table(
-        df_corp, [col, "delta_1d", "delta_7d", "pct_usdclp"],
+        df_corp, [col, "delta_1d", "delta_5d", "pct_usdclp"],
         col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
-    ctx["corporate_delta7"] = make_bar_chart(df_corp, "Data", "delta_7d", "DELTA 7 DIAS: Empresas Sector Real (USD million)")
-    ctx["corporate_delta28"] = make_bar_chart(df_corp, "Data", "delta_28d", "DELTA 28 DIAS: Empresas Sector Real (USD million)")
+    ctx["corporate_delta5"] = make_bar_chart(
+        df_corp, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: Empresas Sector Real (USD million)",
+    )
+    ctx["corporate_delta21"] = make_bar_chart(
+        df_corp, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: Empresas Sector Real (USD million)",
+    )
 
     # ── BANCOS ──
     col = "PosicaoBancos"
-    df_banks = _add_pct_usdclp(compute_deltas(dados, col, [1, 7, 28]))
+    df_banks = _add_pct_usdclp(compute_deltas(dados, col, [1, 5, 21], sessions=True))
     ctx["banks_line"] = make_line_chart(dados, "Data", col, "Posição dos Bancos: Net Spot (USD million)")
     ctx["banks_table"] = make_summary_table(
-        df_banks, [col, "delta_1d", "delta_7d", "pct_usdclp"],
+        df_banks, [col, "delta_1d", "delta_5d", "pct_usdclp"],
         col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
-    ctx["banks_delta7"] = make_bar_chart(df_banks, "Data", "delta_7d", "DELTA 7 DIAS: Posição dos Bancos (USD million)")
-    ctx["banks_delta28"] = make_bar_chart(df_banks, "Data", "delta_28d", "DELTA 28 DIAS: Posição dos Bancos (USD million)")
+    ctx["banks_delta5"] = make_bar_chart(
+        df_banks, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: Posição dos Bancos (USD million)",
+    )
+    ctx["banks_delta21"] = make_bar_chart(
+        df_banks, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: Posição dos Bancos (USD million)",
+    )
 
     # ── TOTAL VS USDCLP ──
     dados_total = dados.copy()
@@ -197,17 +211,23 @@ def build_swap_section(swap_data):
 def build_offshore_adj_section(dados, afp_wk=None):
     """Gera charts e tables para a aba Offshore Ajustado.
 
+    Toda a aba na convencao compra-de-USD: positivo = compra de USD (venda de
+    CLP), negativo = venda de USD. Vale para o nivel, para os deltas e para as
+    duas pernas semanais — as series cruas do BCCh vem na otica do banco
+    residente e entram invertidas.
+
     `afp_wk` e o semanal dos fundos de pensao, calculado uma vez no main e
     reaproveitado aqui para o comparativo de net entre os dois setores.
     """
     ctx = {}
     adj_df = build_offshore_adjusted(dados)
 
-    # As duas pernas por semana e a correlacao entre elas (antes de inverter o sinal
-    # de Offshore_Adj: essas funcoes leem as colunas cruas "No residentes"/"spot_neto")
+    # As duas pernas por semana e a correlacao entre elas. build_weekly_legs ja
+    # devolve em compra-de-USD; build_offshore_corr le as colunas cruas e a
+    # correlacao e invariante a inversao conjunta das duas pernas.
     wk = build_weekly_legs(adj_df)
     ctx["offadj_weekly_bars"] = make_weekly_legs_bars(
-        wk, "SEMANAL: as duas pernas do fluxo do offshore",
+        wk, "SEMANAL: as duas pernas do fluxo do offshore", usd=True,
     )
     ctx["offadj_net_vs_afp"] = make_net_comparison_chart(
         build_net_comparison(afp_wk if afp_wk is not None else pd.DataFrame(), wk),
@@ -218,44 +238,54 @@ def build_offshore_adj_section(dados, afp_wk=None):
         "Correlação móvel entre as pernas: NDF (saldo) vs spot acumulado",
     )
 
-    # Inverter sinal: positivo = long USD, negativo = short USD
+    # Inverter sinal: positivo = compra de USD, negativo = venda de USD
     adj_df["Offshore_Adj"] = -adj_df["Offshore_Adj"]
 
+    # Deltas em PREGOES (5 e 21), como as abas de Fundos de Pensao, Offshore e
+    # Fluxo AFP — nao em dias corridos, que dariam janela erratica (5 dias
+    # corridos cobrem 3 pregoes na segunda e 5 so na sexta).
     fx_labels = {
         "delta_1d": "Delta 1D",
-        "delta_7d": "Delta 7D",
+        "delta_5d": "Delta 5D",
+        "delta_21d": "Delta 21D",
         "pct_usdclp": "% USDCLP",
     }
 
-    # Dual-axis: Offshore Ajustado vs USDCLP (eixo direito NAO invertido)
+    # Dual-axis: Offshore Ajustado vs USDCLP (eixo direito NAO invertido, porque
+    # na convencao compra-de-USD as duas series andam no mesmo sentido). Abre em
+    # jan/2025 com os dois eixos padronizados na janela visivel, o que faz as
+    # linhas andarem quase um pra um; o JS refaz essa conta quando o usuario
+    # expande a janela, ate a amostra toda.
     ctx["offadj_chart"] = make_dual_axis_chart(
         adj_df, "Data", "Offshore_Adj", "USDCLP",
         title="Offshore Ajustado (NDF + Spot Acum.) vs USDCLP",
         y1_name="Offshore Adj (USD mm)", y2_name="USDCLP",
+        y2_color=JGP_AZUL,
         invert_y2=False,
-        annotations=[
-            dict(text="Long USD", y_pos="top", color=JGP_VERDE),
-            dict(text="Short USD", y_pos="bottom", color=JGP_VERMELHO),
-        ],
+        default_start=OFFSHORE_ADJ_DEFAULT_START,
+        usd_labels=True,
+        fit_1a1=True,
     )
 
     # Tabela: ultimas 5 linhas com deltas + % USDCLP
     col = "Offshore_Adj"
-    df_deltas = compute_deltas(adj_df, col, [1, 7, 28])
+    df_deltas = compute_deltas(adj_df, col, [1, 5, 21], sessions=True)
     df_deltas["pct_usdclp"] = 100 * (np.log(df_deltas["USDCLP"]) - np.log(df_deltas["USDCLP"].shift(1)))
     ctx["offadj_table"] = make_summary_table(
-        df_deltas, [col, "delta_1d", "delta_7d", "pct_usdclp"],
+        df_deltas, [col, "delta_1d", "delta_5d", "pct_usdclp"],
         col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
 
     # Bar charts de delta
-    ctx["offadj_delta7"] = make_bar_chart(
-        df_deltas, "Data", "delta_7d",
-        "DELTA 7 DIAS: Offshore Ajustado (USD million)",
+    ctx["offadj_delta5"] = make_bar_chart(
+        df_deltas, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: Offshore Ajustado (USD million)",
+        usd_labels=True,
     )
-    ctx["offadj_delta28"] = make_bar_chart(
-        df_deltas, "Data", "delta_28d",
-        "DELTA 28 DIAS: Offshore Ajustado (USD million)",
+    ctx["offadj_delta21"] = make_bar_chart(
+        df_deltas, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: Offshore Ajustado (USD million)",
+        usd_labels=True,
     )
 
     return ctx
@@ -328,7 +358,7 @@ def build_afp_flow_section(afp_df, wk):
 def build_sectors_section(dados):
     """Gera a aba Todos os Setores: NDF + spot de cada setor, em compra-de-CLP.
 
-    Uma tabela por horizonte (1, 7 e 28 dias) mais tres graficos empilhados
+    Uma tabela por horizonte (1, 5 e 21 pregoes) mais tres graficos empilhados
     semanais: net, a perna de NDF e a perna de spot. As tabelas fecham por construcao: as seis folhas residentes somam
     Residentes no bancos, e este mais No residentes soma o monto vigente neto.
     """
@@ -342,9 +372,11 @@ def build_sectors_section(dados):
             **{f"sectors_table_{d}": "<p>—</p>" for d in SECTOR_WINDOWS},
         }
 
-    for dias in SECTOR_WINDOWS:
-        tab, inicio, fim = build_sector_window_table(long_df, dias)
-        ctx[f"sectors_table_{dias}"] = make_sector_flow_table(tab, dias, inicio, fim)
+    for sessoes in SECTOR_WINDOWS:
+        tab, inicio, fim = build_sector_window_table(long_df, sessoes)
+        ctx[f"sectors_table_{sessoes}"] = make_sector_flow_table(
+            tab, sessoes, inicio, fim
+        )
 
     # Os tres saem da mesma funcao e do mesmo desenho, para dar para comparar
     # barra a barra: de onde veio o net daquela semana, do forward ou do spot.
@@ -369,8 +401,8 @@ def build_colombia_section(col_data):
     if series.empty:
         ctx["colombia_line"] = "<p>Dados Colombia indisponíveis</p>"
         ctx["colombia_table"] = "<p>—</p>"
-        ctx["colombia_delta7"] = "<p>—</p>"
-        ctx["colombia_delta28"] = "<p>—</p>"
+        ctx["colombia_delta5"] = "<p>—</p>"
+        ctx["colombia_delta21"] = "<p>—</p>"
         return ctx
 
     ctx["colombia_line"] = make_colombia_line_chart(series)
@@ -378,17 +410,22 @@ def build_colombia_section(col_data):
         table_data, ["Nivel", "Delta", "% USDCOP"], date_col="Fecha", decimals=1
     )
 
-    # Deltas (dias corridos)
-    series_deltas = compute_deltas(series, "Extranjero", [7, 28], date_col="Fecha")
+    # Deltas em PREGOES (5 e 21), como as abas do Chile. `sessions=True` conta
+    # linha, entao o filtro de dia de semana e necessario: a serie do Banrep tem
+    # ~70 linhas de sabado/domingo ate 2022, e cada uma inflaria a janela.
+    series_pregoes = series[series["Fecha"].dt.dayofweek < 5]
+    series_deltas = compute_deltas(
+        series_pregoes, "Extranjero", [5, 21], date_col="Fecha", sessions=True
+    )
 
-    ctx["colombia_delta7"] = make_bar_chart(
-        series_deltas, "Fecha", "delta_7d",
-        "COLOMBIA: DELTA 7 DIAS SALDO FWD OFFSHORE (USD million)",
+    ctx["colombia_delta5"] = make_bar_chart(
+        series_deltas, "Fecha", "delta_5d",
+        "COLOMBIA: DELTA 5 PREGÕES SALDO FWD OFFSHORE (USD million)",
         date_filter="2024-01-01",
     )
-    ctx["colombia_delta28"] = make_bar_chart(
-        series_deltas, "Fecha", "delta_28d",
-        "COLOMBIA: DELTA 28 DIAS SALDO FWD OFFSHORE (USD million)",
+    ctx["colombia_delta21"] = make_bar_chart(
+        series_deltas, "Fecha", "delta_21d",
+        "COLOMBIA: DELTA 21 PREGÕES SALDO FWD OFFSHORE (USD million)",
         date_filter="2024-01-01",
     )
 

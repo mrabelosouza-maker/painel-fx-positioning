@@ -114,6 +114,10 @@ OFFSHORE_ADJ_CUTOVER = "2025-12-15"  # a partir desta data, soma spot acumulado
 # 15-dez-2025 = 1o dia util apos o 2o turno, mesma ancora do Santander.
 # Trocar a ancora e um deslocamento aditivo puro: muda o nivel, nao a forma nem o z-score.
 
+# Janela em que o grafico de nivel vs USDCLP abre. Nao corta a amostra: o dado
+# inteiro vai para o grafico e o zoom (ou duplo-clique) devolve a serie toda.
+OFFSHORE_ADJ_DEFAULT_START = "2025-01-01"
+
 # ──────────────────────────────────────────────────────────────────────
 # Colombia
 # ──────────────────────────────────────────────────────────────────────
@@ -203,4 +207,7 @@ SECTOR_CHART_LINES = SECTOR_LEAVES + [SECTOR_OFFSHORE]
 # O total do mercado, somado das linhas acima e desenhado destacado.
 SECTOR_NET_LINE = "TOTAL (todos os setores)"
 
-SECTOR_WINDOWS = [1, 7, 28]
+# Janelas da aba em PREGOES, nao dias corridos: 1, 5 e 21 sessoes. Dias corridos
+# davam janela erratica (7 corridos cobrem 5 pregoes na sexta e 4 na segunda de
+# feriado), e a aba de fluxo AFP ja usa a convencao de pregao (AFP_DELTA_SESSIONS).
+SECTOR_WINDOWS = [1, 5, 21]

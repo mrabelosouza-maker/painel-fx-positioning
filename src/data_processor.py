@@ -136,6 +136,33 @@ def _fetch_swap_group(series_codes: list[str]) -> pd.DataFrame:
     return matrix.sort_values("Data").reset_index(drop=True)
 
 
+# Horizontes da tabela de swap em PREGOES: 1, 5, 21, 32 e 63 sessoes valem os
+# antigos 1, 7, 30, 45 e 90 dias corridos (calendario x 5/7).
+SWAP_DELTA_SESSIONS = [1, 5, 21, 32, 63]
+
+
+def swap_delta_label(sessoes: int) -> str:
+    """Rotulo da linha da tabela de swap: '1 Pregão' / 'N Pregões'."""
+    return "1 Pregão" if sessoes == 1 else f"{sessoes} Pregões"
+
+
+def _deltas_por_pregao(serie: pd.Series, lags: list[int]) -> dict:
+    """Variacao do ultimo valor contra o de N pregoes atras, para cada N.
+
+    A serie ja vem so com pregao, entao andar N linhas anda N sessoes.
+    """
+    valores = serie.reset_index(drop=True)
+    ultimo = valores.iloc[-1] if len(valores) else np.nan
+    saida = {}
+    for lag in lags:
+        pos = len(valores) - 1 - lag
+        anterior = valores.iloc[pos] if pos >= 0 else np.nan
+        saida[swap_delta_label(lag)] = (
+            np.nan if pd.isna(ultimo) or pd.isna(anterior) else float(ultimo - anterior)
+        )
+    return saida
+
+
 def build_swap_data() -> dict:
     """Busca e processa todos os dados de Swap Camara.
 
@@ -203,9 +230,13 @@ def build_swap_data() -> dict:
 
     dv01["ate2y"] = ate2y_df
 
-    # Delta tables for ate2y, 5y, 10y (dias corridos)
+    # Delta tables for ate2y, 5y, 10y, em PREGOES (nao dias corridos).
+    # Os horizontes sao os mesmos de antes, so contados em sessao: 1, 5, 21, 32 e
+    # 63 pregoes valem 1, 7, 30, 45 e 90 dias corridos. Como o df ja vem so com
+    # dia util (o dropna de _fetch_swap_group derruba fim de semana e feriado),
+    # andar N linhas anda exatamente N sessoes.
     delta_tables = {}
-    delta_lags = [1, 7, 30, 45, 90]
+    delta_lags = SWAP_DELTA_SESSIONS
 
     for tenor_key in ["ate2y", "5y", "10y"]:
         df_t = dv01[tenor_key].copy().dropna(subset=["Data"])
@@ -220,46 +251,16 @@ def build_swap_data() -> dict:
         ]:
             col = f"total_{tenor_key}{suffix}"
             if col not in df_t.columns or df_t[col].dropna().empty or last_date is None:
-                table_data[participant] = {f"{lag}D Change": np.nan for lag in delta_lags}
+                table_data[participant] = {swap_delta_label(lag): np.nan for lag in delta_lags}
                 continue
-            last_val = df_t[col].iloc[-1]
-            date_to_val = dict(zip(df_t["Data"], df_t[col]))
-            sorted_dates = df_t["Data"].sort_values().values
-            deltas = {}
-            for lag in delta_lags:
-                target = last_date - pd.Timedelta(days=lag)
-                candidates = sorted_dates[sorted_dates <= target]
-                if len(candidates) > 0:
-                    prev_val = date_to_val.get(pd.Timestamp(candidates[-1]))
-                    if prev_val is not None and not pd.isna(prev_val):
-                        deltas[f"{lag}D Change"] = float(last_val - prev_val)
-                    else:
-                        deltas[f"{lag}D Change"] = np.nan
-                else:
-                    deltas[f"{lag}D Change"] = np.nan
-            table_data[participant] = deltas
+            table_data[participant] = _deltas_por_pregao(df_t[col], delta_lags)
 
         # Local Banks = -total
         col_total = f"total_{tenor_key}"
         if col_total in df_t.columns and not df_t[col_total].dropna().empty and last_date is not None:
-            last_val = -df_t[col_total].iloc[-1]
-            date_to_val = dict(zip(df_t["Data"], -df_t[col_total]))
-            sorted_dates = df_t["Data"].sort_values().values
-            deltas_banks = {}
-            for lag in delta_lags:
-                target = last_date - pd.Timedelta(days=lag)
-                candidates = sorted_dates[sorted_dates <= target]
-                if len(candidates) > 0:
-                    prev_val = date_to_val.get(pd.Timestamp(candidates[-1]))
-                    if prev_val is not None and not pd.isna(prev_val):
-                        deltas_banks[f"{lag}D Change"] = float(last_val - prev_val)
-                    else:
-                        deltas_banks[f"{lag}D Change"] = np.nan
-                else:
-                    deltas_banks[f"{lag}D Change"] = np.nan
-            table_data["Local Banks"] = deltas_banks
+            table_data["Local Banks"] = _deltas_por_pregao(-df_t[col_total], delta_lags)
         else:
-            table_data["Local Banks"] = {f"{lag}D Change": np.nan for lag in delta_lags}
+            table_data["Local Banks"] = {swap_delta_label(lag): np.nan for lag in delta_lags}
 
         delta_tables[tenor_key] = table_data
 
@@ -316,12 +317,14 @@ def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
-    """Agrega as duas pernas do offshore por semana (sexta a sexta).
+    """Agrega as duas pernas do offshore por semana (sexta a sexta), em compra-de-USD.
 
     Mesma convencao e mesmos nomes de coluna que build_afp_weekly_legs, para os
     dois setores usarem o mesmo grafico e poderem ser comparados lado a lado:
-    acima de zero = compra de CLP. As series cruas do BCCh vem na otica do banco
-    residente, que ja e essa convencao, entao entram sem inverter sinal.
+    acima de zero = compra de USD. As series cruas do BCCh vem na otica do banco
+    residente (positivo = cliente comprando CLP), entao as duas entram com o
+    sinal invertido — sem isso o comparativo com o net dos fundos de pensao, que
+    ja sai em compra-de-USD, somaria as duas series em sinais opostos.
 
       ndf_wk  : variacao semanal do saldo de NDF
       bcch_wk : soma semanal do fluxo spot liquido
@@ -329,8 +332,8 @@ def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
     """
     d = adj_df.set_index("Data").sort_index()
     wk = pd.DataFrame({
-        "ndf_wk": d["No residentes"].resample("W-FRI").last().diff(),
-        "bcch_wk": d["spot_neto"].resample("W-FRI").sum(),
+        "ndf_wk": (-d["No residentes"]).resample("W-FRI").last().diff(),
+        "bcch_wk": (-d["spot_neto"]).resample("W-FRI").sum(),
     }).dropna()
     wk["net_wk"] = wk["ndf_wk"] + wk["bcch_wk"]
     return wk.rename_axis("Semana").reset_index()
@@ -339,7 +342,7 @@ def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
 def build_net_comparison(afp_wk: pd.DataFrame, off_wk: pd.DataFrame) -> pd.DataFrame:
     """Junta o net semanal dos fundos de pensao, o do offshore e a soma dos dois.
 
-    As duas ja saem em compra-de-CLP das suas funcoes semanais, entao vao para o
+    As duas ja saem em compra-de-USD das suas funcoes semanais, entao vao para o
     mesmo eixo sem conversao. Uniao das semanas: as duas series comecam em datas
     diferentes e cada linha fica com o buraco onde nao tem dado.
     """
@@ -683,9 +686,14 @@ def build_all_sectors_flow(dados: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_sector_window_table(
-    long_df: pd.DataFrame, dias: int
+    long_df: pd.DataFrame, sessoes: int
 ) -> tuple[pd.DataFrame, pd.Timestamp, pd.Timestamp]:
-    """Acumulado de `dias` corridos por setor: NDF, spot e net.
+    """Acumulado dos ultimos `sessoes` pregoes por setor: NDF, spot e net.
+
+    A janela conta PREGOES, nao dias corridos: pega as N ultimas datas com dado.
+    Assim a janela tem sempre o mesmo numero de sessoes, independente de feriado
+    ou de em que dia da semana o build roda. Mesma convencao de
+    AFP_DELTA_SESSIONS e dos deltas de 5/21 pregoes das outras abas.
 
     A janela fecha na ultima data com dado e vale para todos os setores, senao a
     tabela somaria periodos diferentes e a linha de total nao fecharia.
@@ -694,9 +702,14 @@ def build_sector_window_table(
     if long_df.empty:
         return pd.DataFrame(), None, None
 
-    fim = long_df.dropna(subset=["net_1d"])["Data"].max()
-    inicio = fim - pd.Timedelta(days=dias)
-    janela = long_df[(long_df["Data"] > inicio) & (long_df["Data"] <= fim)]
+    datas = (
+        long_df.dropna(subset=["net_1d"])["Data"].drop_duplicates().sort_values()
+    )
+    if datas.empty:
+        return pd.DataFrame(), None, None
+    janela_datas = datas.tail(sessoes)
+    fim = janela_datas.iloc[-1]
+    janela = long_df[long_df["Data"].isin(set(janela_datas))]
 
     tab = janela.groupby("setor")[["ndf_1d", "spot"]].sum(min_count=1)
     tab["net"] = tab[["ndf_1d", "spot"]].sum(axis=1, min_count=1)
