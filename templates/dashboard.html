@@ -385,9 +385,9 @@
             observa no mesmo setor. As duas na mesma convenção: acima de zero =
             <b>compra de USD</b> (venda de CLP).
             <br><br>
-            <b>Atenção ao sinal.</b> Esta aba, a de <i>Fundos de Pensão</i> e a de
-            <i>Todos os Setores</i> usam a ótica do USD; a de <i>Offshore Ajustado</i>
-            segue na de compra de CLP, com o sinal oposto.
+            <b>Atenção ao sinal.</b> Esta aba, a de <i>Fundos de Pensão</i>, a de
+            <i>Offshore</i> e a de <i>Todos os Setores</i> usam a ótica do USD; a de
+            <i>Offshore Ajustado</i> segue na de compra de CLP, com o sinal oposto.
             <br><br>
             <b>Janela de 5 pregões</b>, não de 5 dias corridos: a série só tem dia
             útil, então o deslocamento é de exatamente cinco sessões. Com dias
@@ -420,16 +420,20 @@
     <!-- ══════════════════ OFFSHORE ══════════════════ -->
     <div id="tab-offshore" class="tab">
       <h2>Posição e resumo</h2>
-      <p class="sub">Sinal cru do BCCh: acima de zero = compra de CLP (venda de USD).</p>
+      <p class="sub">Convenção desta aba: <b>acima de zero = compra de USD</b>, abaixo de zero = venda de USD.
+        A série crua do BCCh vem na ótica do banco residente (positivo = offshore vendendo USD) e entra aqui
+        invertida, para bater com as abas de Fundos de Pensão, Fluxo AFP e Todos os Setores.</p>
       <div class="grid-wide">
         <div class="card">{{ offshore_line | safe }}</div>
         <div class="card">{{ offshore_table | safe }}</div>
       </div>
 
       <h2>Variação por janela</h2>
+      <p class="sub">Janelas em <b>pregões</b>, não em dias corridos: a série só tem dia útil, então o
+        deslocamento é de exatamente 5 e 21 sessões.</p>
       <div class="grid2">
-        <div class="card">{{ offshore_delta7 | safe }}</div>
-        <div class="card">{{ offshore_delta28 | safe }}</div>
+        <div class="card">{{ offshore_delta5 | safe }}</div>
+        <div class="card">{{ offshore_delta21 | safe }}</div>
       </div>
     </div>
 

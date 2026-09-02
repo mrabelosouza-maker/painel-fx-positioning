@@ -113,15 +113,42 @@ def build_fx_section(dados):
     )
 
     # ── OFFSHORE ──
+    # Mesma convencao compra-de-USD das abas de Fundos de Pensao, Fluxo AFP e
+    # Todos os Setores: positivo = compra de USD. A serie crua do BCCh vem na
+    # otica do banco residente (positivo = offshore net short USD = offshore
+    # vendendo USD), entao entra invertida — nivel e deltas juntos, senao tabela
+    # e grafico discordam. Deltas em PREGOES (5 e 21), nao em dias corridos.
     col = "No residentes"
-    df_off = _add_pct_usdclp(compute_deltas(dados, col, [1, 7, 28]))
-    ctx["offshore_line"] = make_line_chart(dados, "Data", col, "No Residentes (Offshore): Net Short (USD million)")
-    ctx["offshore_table"] = make_summary_table(
-        df_off, [col, "delta_1d", "delta_7d", "pct_usdclp"],
-        col_labels={col: "Nivel", **fx_labels}, decimals=1,
+    dados_off = dados.copy()
+    dados_off[col] = -dados_off[col]
+    df_off = _add_pct_usdclp(
+        compute_deltas(dados_off, col, [1, 5, 21], sessions=True)
     )
-    ctx["offshore_delta7"] = make_bar_chart(df_off, "Data", "delta_7d", "DELTA 7 DIAS: No Residentes (USD million)")
-    ctx["offshore_delta28"] = make_bar_chart(df_off, "Data", "delta_28d", "DELTA 28 DIAS: No Residentes (USD million)")
+    offshore_labels = {
+        "delta_1d": "Delta 1D",
+        "delta_5d": "Delta 5D",
+        "delta_21d": "Delta 21D",
+        "pct_usdclp": "% USDCLP",
+    }
+    ctx["offshore_line"] = make_line_chart(
+        dados_off, "Data", col,
+        "No Residentes (Offshore): Posição em USD (USD million)",
+        usd_labels=True,
+    )
+    ctx["offshore_table"] = make_summary_table(
+        df_off, [col, "delta_1d", "delta_5d", "pct_usdclp"],
+        col_labels={col: "Nivel", **offshore_labels}, decimals=1,
+    )
+    ctx["offshore_delta5"] = make_bar_chart(
+        df_off, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: No Residentes (USD million)",
+        usd_labels=True,
+    )
+    ctx["offshore_delta21"] = make_bar_chart(
+        df_off, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: No Residentes (USD million)",
+        usd_labels=True,
+    )
 
     # ── CORPORATE ──
     col = "Empresas sector real"
