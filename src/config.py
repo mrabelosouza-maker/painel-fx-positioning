@@ -116,7 +116,14 @@ OFFSHORE_ADJ_CUTOVER = "2025-12-15"  # a partir desta data, soma spot acumulado
 
 # Janela em que o grafico de nivel vs USDCLP abre. Nao corta a amostra: o dado
 # inteiro vai para o grafico e o zoom (ou duplo-clique) devolve a serie toda.
-OFFSHORE_ADJ_DEFAULT_START = "2025-01-01"
+#
+# E o proprio cutover, e nao uma escolha estetica: antes dele a serie e SO a
+# perna de NDF, porque o spot acumulado comeca a acumular ali. Abrir antes
+# compara duas definicoes diferentes de serie contra o USDCLP, e o resultado e
+# um descolamento que nenhuma escala de eixo resolve — a correlacao de nivel vai
+# de +0,88 na janela pos-cutover para -0,02 comecando em jan/2025, e a distancia
+# media entre as linhas sobe de 8% para 25% da altura do painel.
+OFFSHORE_ADJ_DEFAULT_START = OFFSHORE_ADJ_CUTOVER
 
 # ──────────────────────────────────────────────────────────────────────
 # Colombia

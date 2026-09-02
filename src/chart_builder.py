@@ -144,24 +144,37 @@ def make_bar_chart(
 # ──────────────────────────────────────────────────────────────────────
 # Dual-axis charts
 # ──────────────────────────────────────────────────────────────────────
-def _simetrico_em_torno_da_media(vals: pd.Series, folga: float = 1.08):
-    """Range simetrico media +/- max|desvio|, com folga.
+def _ranges_padronizados(y1: pd.Series, y2: pd.Series, folga: float = 1.08):
+    """Um range por serie, na mesma escala padronizada: media +/- k*sigma.
 
     E a transformacao que faz duas series de escalas diferentes andarem "um pra
-    um" no painel: cada uma vira a mesma fracao da altura por desvio relativo a
-    propria media, entao a distancia vertical entre as linhas passa a ser
-    diferenca de desvio padronizado, nao diferenca de unidade. Simetrico de
-    proposito — assimetrico deslocaria as duas por fatores diferentes e a
-    leitura de co-movimento se perderia.
+    um" no painel. O `k` e COMUM as duas e sai do maior desvio relativo
+    observado, entao: as duas ficam contidas, a mais esticada toca a borda, e a
+    posicao vertical de cada uma passa a ser desvio padronizado — a distancia
+    entre as linhas vira diferenca de z-score, nao diferenca de unidade.
+
+    Padronizar por sigma, e nao por max|desvio| de cada serie, evita que um
+    unico spike de uma das pernas defina sozinho a escala dela e desalinhe as
+    duas (na amostra inteira isso fecha ~1,7pp da distancia media).
+
+    Simetrico em torno da media de proposito: assimetrico deslocaria as duas por
+    fatores diferentes e a leitura de co-movimento se perderia. Nao ha ajuste
+    melhor que este para o segundo eixo — o OLS, que minimiza a distancia
+    vertical, so ganha encolhendo a segunda serie ate ela virar reta (com
+    rho=0,88 empata; com rho~0 ele reduz o span dela a 2% do painel e inverte o
+    eixo em cima de ruido).
     """
-    v = vals.dropna()
-    if len(v) < 2:
-        return None
-    media = float(v.mean())
-    desvio = float((v - media).abs().max()) * folga
-    if not desvio > 0:
-        desvio = abs(media) * 0.01 or 1.0
-    return [media - desvio, media + desvio]
+    a, b = y1.dropna(), y2.dropna()
+    if len(a) < 2 or len(b) < 2:
+        return None, None
+    c1, c2 = float(a.mean()), float(b.mean())
+    s1, s2 = float(a.std()), float(b.std())
+    if not (s1 > 0 and s2 > 0):
+        return None, None
+    k = max((a - c1).abs().max() / s1, (b - c2).abs().max() / s2) * folga
+    if not k > 0:
+        return None, None
+    return ([c1 - k * s1, c1 + k * s1], [c2 - k * s2, c2 + k * s2])
 
 
 def _js_fit_1a1(
@@ -186,20 +199,30 @@ def _js_fit_1a1(
   var alvo = {json.dumps(div_id)}, folga = {folga}, rev = {json.dumps(bool(rev2))};
   var Y = [{arr(y1)}, {arr(y2)}], EIXO = ["yaxis", "yaxis2"], n = Y[0].length;
   function ajusta(lo, hi) {{
-    var i0 = Math.max(0, Math.ceil(lo)), i1 = Math.min(n - 1, Math.floor(hi)), up = {{}};
+    var i0 = Math.max(0, Math.ceil(lo)), i1 = Math.min(n - 1, Math.floor(hi));
+    var est = [];
     for (var k = 0; k < 2; k++) {{
       var v = [], a = Y[k];
       for (var i = i0; i <= i1; i++) {{
         if (a[i] !== null && isFinite(a[i])) v.push(a[i]);
       }}
-      if (v.length < 2) continue;
+      if (v.length < 2) return {{}};
       var m = 0;
       v.forEach(function(z) {{ m += z; }});
       m /= v.length;
-      var d = 0;
-      v.forEach(function(z) {{ d = Math.max(d, Math.abs(z - m)); }});
-      d = d * folga || Math.abs(m) * 0.01 || 1;
-      up[EIXO[k] + ".range"] = (k === 1 && rev) ? [m + d, m - d] : [m - d, m + d];
+      var ss = 0, dv = 0;
+      v.forEach(function(z) {{ ss += (z - m) * (z - m); dv = Math.max(dv, Math.abs(z - m)); }});
+      var sd = Math.sqrt(ss / (v.length - 1));
+      if (!(sd > 0)) return {{}};
+      est.push({{m: m, sd: sd, dv: dv}});
+    }}
+    // k comum as duas series: o maior desvio relativo observado na janela
+    var kk = Math.max(est[0].dv / est[0].sd, est[1].dv / est[1].sd) * folga;
+    if (!(kk > 0)) return {{}};
+    var up = {{}};
+    for (var j = 0; j < 2; j++) {{
+      var lo2 = est[j].m - kk * est[j].sd, hi2 = est[j].m + kk * est[j].sd;
+      up[EIXO[j] + ".range"] = (j === 1 && rev) ? [hi2, lo2] : [lo2, hi2];
     }}
     return up;
   }}
@@ -306,8 +329,7 @@ def make_dual_axis_chart(
         # Ranges da montagem: a mesma conta do JS, para o primeiro paint ja sair
         # certo em vez de piscar na escala automatica.
         janela = plot_df.iloc[i0:]
-        r1 = _simetrico_em_torno_da_media(janela[y1])
-        r2 = _simetrico_em_torno_da_media(janela[y2])
+        r1, r2 = _ranges_padronizados(janela[y1], janela[y2])
         if r1:
             fig.update_yaxes(range=r1, secondary_y=False)
         if r2:
