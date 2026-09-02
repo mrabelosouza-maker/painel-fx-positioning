@@ -234,6 +234,21 @@ def _js_fit_1a1(
       if (!mexeuX) return;
       var xr = (gd.layout.xaxis && gd.layout.xaxis.range) || [0, n - 1];
       var up = ajusta(xr[0], xr[1]);
+      // Realce do botao segue a janela de verdade, venha ela de um clique no
+      // botao, de um zoom manual ou do duplo-clique. Sem isto o duplo-clique
+      // devolvia a janela inicial deixando aceso o botao da janela anterior.
+      // -1 = nenhum aceso, o caso de um zoom que nao corresponde a botao algum.
+      var um = gd.layout.updatemenus;
+      if (um && um[0] && um[0].buttons) {{
+        var aceso = -1;
+        for (var q = 0; q < um[0].buttons.length; q++) {{
+          var ar = um[0].buttons[q].args, br = (ar && ar[0]) ? ar[0]["xaxis.range"] : null;
+          if (br && Math.abs(br[0] - xr[0]) < 1e-6 && Math.abs(br[1] - xr[1]) < 1e-6) {{
+            aceso = q; break;
+          }}
+        }}
+        if (um[0].active !== aceso) up["updatemenus[0].active"] = aceso;
+      }}
       if (Object.keys(up).length) window.Plotly.relayout(gd, up);
     }});
   }}
@@ -241,6 +256,51 @@ def _js_fit_1a1(
 }})();
 </script>
 """
+
+
+def _indice_inicial(datas: pd.Series, janela) -> int:
+    """Indice em que uma janela comeca, no eixo categorico.
+
+    `janela` aceita as tres formas que os botoes usam: uma data (str ou
+    Timestamp), um numero de pregoes contados do fim, ou None para a amostra
+    toda. Datas fora do inicio da amostra caem em 0, e nao em erro: assim o
+    botao continua valido quando a serie encurta.
+    """
+    n = len(datas)
+    if janela is None:
+        return 0
+    if isinstance(janela, (int,)) and not isinstance(janela, bool):
+        return max(0, n - int(janela))
+    pos = datas >= pd.Timestamp(janela)
+    return int(pos.values.argmax()) if pos.any() else 0
+
+
+def _botoes_janela(fig: go.Figure, datas: pd.Series, janelas: list, i0_default: int) -> None:
+    """Botoes de janela clicaveis, dentro do proprio grafico.
+
+    Usam method="relayout" so no eixo X, entao o handler de plotly_relayout
+    refaz os dois eixos Y como faria num zoom manual — os botoes nao precisam
+    saber nada de escala. `active` aponta o botao que corresponde a janela em
+    que o painel abriu, para o realce nao mentir no primeiro paint.
+    """
+    n = len(datas)
+    botoes, ativo = [], 0
+    for k, (rotulo, janela) in enumerate(janelas):
+        i0 = _indice_inicial(datas, janela)
+        if i0 == i0_default:
+            ativo = k
+        botoes.append(dict(
+            label=rotulo, method="relayout",
+            args=[{"xaxis.range": [i0 - 0.5, n - 0.5]}],
+        ))
+    fig.update_layout(updatemenus=[dict(
+        type="buttons", direction="left", showactive=True, active=ativo,
+        x=1, xanchor="right", y=1.16, yanchor="top",
+        pad=dict(l=0, r=0, t=0, b=0),
+        bgcolor="rgba(255,255,255,0.92)", bordercolor="#C8C8C8", borderwidth=1,
+        font=dict(family=JGP_FONT, size=10, color="#4D4D4D"),
+        buttons=botoes,
+    )])
 
 
 def make_dual_axis_chart(
@@ -258,6 +318,7 @@ def make_dual_axis_chart(
     default_start: str = None,
     usd_labels: bool = False,
     fit_1a1: bool = False,
+    botoes_janela: list = None,
 ) -> str:
     """Duas series de escalas diferentes, uma em cada eixo Y.
 
@@ -268,6 +329,9 @@ def make_dual_axis_chart(
       igual as outras abas (+ = compra de USD).
     - `fit_1a1`: padroniza os dois eixos na janela visivel para as series andarem
       quase um pra um, e refaz essa conta em JS a cada mudanca de janela.
+    - `botoes_janela`: lista de (rotulo, janela) que vira botoes clicaveis no
+      canto do grafico. `janela` e uma data, um numero de pregoes contados do
+      fim, ou None para a amostra toda.
     """
     plot_df = df.dropna(subset=[x, y1, y2]).copy()
     x_str = _date_strings(plot_df[x])
@@ -285,7 +349,7 @@ def make_dual_axis_chart(
     )
     fig.update_layout(
         title=title, template="jgp", height=500,
-        margin=dict(l=60, r=60, t=78, b=104),
+        margin=dict(l=60, r=60, t=78 if not botoes_janela else 104, b=104),
         legend=dict(orientation="h", yanchor="top", y=-0.20, xanchor="left", x=0),
         hovermode="x unified",
     )
@@ -324,6 +388,9 @@ def make_dual_axis_chart(
         if pos.any() and not pos.all():
             i0 = int(pos.values.argmax())
             fig.update_xaxes(range=[i0 - 0.5, len(x_str) - 0.5])
+
+    if botoes_janela:
+        _botoes_janela(fig, plot_df[x], botoes_janela, i0)
 
     if fit_1a1:
         # Ranges da montagem: a mesma conta do JS, para o primeiro paint ja sair
