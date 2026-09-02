@@ -64,13 +64,13 @@ Retorno logarítmico diário, em USD (a carteira e o hedge são em USD).
 
 ### Amostra
 
-2022-06-01 a 2026-08-31, 1.054 observações — o alcance atual do painel.
+2022-06-01 a 2026-08-31, 1.054 observações. **Fixa: é o limite do dado do BCCh,
+não uma escolha de configuração.** Não há histórico anterior a buscar, e o
+`BCENTRAL_FIRSTDATE = "2022-06-01"` do `config.py` já reflete esse limite.
 
-`BCENTRAL_FIRSTDATE = "2022-06-01"` em `config.py` é escolha de configuração, não
-limite do dado. **O primeiro passo da implementação é tentar puxar as séries do
-BCCh desde 2015** e verificar o que volta. Se vier histórico maior, a amostra
-cresce e o corte por metades ganha poder. Se não vier, seguimos com 1.054 e a
-limitação vai declarada no relatório.
+A amostra é modesta e não vai crescer, o que torna a busca por especificação o
+principal risco metodológico deste estudo. Ver o critério de plateau na seção de
+critério de sucesso.
 
 ### Alinhamento
 
@@ -180,6 +180,20 @@ O estudo é considerado **positivo** se as três condições valerem:
    utilizável (`k ≥ 1` ou janela acumulada)
 3. Nas duas metades da amostra: β̂ com o mesmo sinal nas duas, e a razão entre o
    maior e o menor em módulo dentro de 2x
+4. **Plateau:** a especificação vencedora não pode ser um pico isolado. Os
+   vizinhos imediatos na grade (`k±1`, ou `w±1`) precisam ter β̂ do mesmo sinal e
+   pelo menos metade do R² fora de amostra do vencedor
+
+O critério 4 é a defesa contra a busca. Com 1.054 observações fixas e ~32
+especificações varridas, o vencedor da grade tem probabilidade alta de ser sorte.
+Mas um mecanismo de rebalanceamento real produz estrutura de defasagem **suave**:
+se o AFP ajusta o hedge ao longo de alguns dias, `k=3` funcionar implica `k=2` e
+`k=4` funcionarem também. Um vencedor isolado, cercado de vizinhos mortos, é a
+assinatura de ruído, não de mecanismo — e é exatamente o que a busca produz.
+
+Esta é uma checagem barata que a amostra sustenta, ao contrário de holdout puro
+(que gastaria observações que não temos) ou de correção de Bonferroni (que, com
+32 testes e uma amostra desse tamanho, mataria também um efeito verdadeiro).
 
 Falhar qualquer uma delas é resultado **negativo**, e o resultado negativo é
 entregável: o relatório sai com o β̂ e os R² medidos, para que a hipótese não
@@ -191,11 +205,14 @@ Não há terceira via. "Deu quase" não conta.
 
 Vão no relatório, não só neste documento.
 
-- **1.054 observações** (menos, se a extensão para 2015 não vier). É pouco para
-  corte de regime; o split em duas metades é o máximo que a amostra sustenta.
-- **Uma especificação vencedora escolhida entre ~32** (11 defasagens + 21 janelas).
-  Isso é busca, e busca infla t-stat. Por isso o critério exige estabilidade nas
-  duas metades, e não só significância na amostra cheia.
+- **1.054 observações, e não há mais.** É o limite do dado do BCCh. Pouco para
+  corte de regime; o split em duas metades é o máximo que a amostra sustenta, e
+  cada metade cobre ~2 anos — o que significa que o teste de estabilidade também
+  é um teste de regime, e os dois não podem ser separados.
+- **Uma especificação vencedora escolhida entre ~32** (11 defasagens + 21 janelas)
+  numa amostra que não cresce. Busca infla t-stat, e este é o principal risco do
+  estudo. Mitigado pelos critérios 3 e 4 (estabilidade e plateau), não eliminado:
+  se o resultado passar, ele ainda é uma hipótese sobrevivente, não um fato.
 - **A defasagem de publicação do BCCh** só é observável hoje, não historicamente —
   o repositório não guarda vintages. Quanto de dianteira o sinal compra sai como
   estimativa a partir da defasagem corrente, não como fato medido.
