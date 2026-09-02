@@ -36,6 +36,8 @@ from chart_builder import (
     make_sector_weekly_stacked,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
+    JGP_VERDE,
+    JGP_VERMELHO,
     make_afp_5d_bars,
     make_afp_daily_bars,
     make_afp_level_line,
@@ -230,11 +232,10 @@ def build_offshore_adj_section(dados, afp_wk=None):
         adj_df, "Data", "Offshore_Adj", "USDCLP",
         title="Offshore Ajustado (NDF + Spot Acum.) vs USDCLP",
         y1_name="Offshore Adj (USD mm)", y2_name="USDCLP",
-        y1_color="dodgerblue", y2_color="red",
         invert_y2=False,
         annotations=[
-            dict(text="Long USD", y_pos="top", color="green"),
-            dict(text="Short USD", y_pos="bottom", color="red"),
+            dict(text="Long USD", y_pos="top", color=JGP_VERDE),
+            dict(text="Short USD", y_pos="bottom", color=JGP_VERMELHO),
         ],
     )
 

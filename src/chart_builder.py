@@ -37,21 +37,23 @@ pio.templates["jgp"] = go.layout.Template(layout=dict(
     font=dict(family=JGP_FONT, size=12, color=JGP_PRETO),
     title=dict(font=dict(family=JGP_FONT, size=14, color=JGP_PRETO),
                x=0.005, xanchor="left", xref="container", yref="container",
-               y=0.98, yanchor="top"),
+               y=0.985, yanchor="top", pad=dict(t=4, l=4)),
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
     colorway=PALETTE_JGP,
     xaxis=dict(
         showgrid=False, zeroline=False,
         linecolor="#000000", linewidth=1, showline=True, mirror=False,
-        ticks="outside", tickcolor="#000000", ticklen=4,
+        ticks="outside", tickcolor="#000000", ticklen=6,
         tickfont=dict(family=JGP_FONT, size=10, color="#4D4D4D"),
+        title=dict(standoff=12), automargin=True,
     ),
     yaxis=dict(
         showgrid=True, gridcolor="#EBEBEB", gridwidth=1, zeroline=False,
         linecolor="#000000", linewidth=1, showline=True, mirror=False,
-        ticks="outside", tickcolor="#000000", ticklen=4,
+        ticks="outside", tickcolor="#000000", ticklen=6,
         tickfont=dict(family=JGP_FONT, size=10, color="#4D4D4D"),
+        title=dict(standoff=14), automargin=True,
     ),
     legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="rgba(0,0,0,0)",
                 font=dict(family=JGP_FONT, size=11, color="#4D4D4D")),
@@ -99,7 +101,7 @@ def make_line_chart(
     ))
     fig.update_layout(
         title=title, xaxis_title="", yaxis_title="USD million",
-        template="jgp", height=400, margin=dict(l=50, r=20, t=50, b=60),
+        template="jgp", height=400, margin=dict(l=50, r=20, t=64, b=60),
         showlegend=False,
     )
     fig.add_hline(y=0, line_dash="solid", line_color="black", line_width=0.5)
@@ -129,7 +131,7 @@ def make_bar_chart(
     ))
     fig.update_layout(
         title=title, xaxis_title="", yaxis_title="USD million",
-        template="jgp", height=350, margin=dict(l=50, r=20, t=50, b=60),
+        template="jgp", height=350, margin=dict(l=50, r=20, t=64, b=60),
         showlegend=False,
     )
     fig.add_hline(y=0, line_dash="solid", line_color="black", line_width=0.5)
@@ -151,7 +153,7 @@ def make_dual_axis_chart(
     y1_name: str = "Positioning",
     y2_name: str = "USDCLP",
     y1_color: str = JGP_VERDE,
-    y2_color: str = "red",
+    y2_color: str = JGP_PRETO,
     invert_y2: bool = True,
     annotations: list = None,
 ) -> str:
@@ -171,8 +173,8 @@ def make_dual_axis_chart(
     )
     fig.update_layout(
         title=title, template="jgp", height=500,
-        margin=dict(l=60, r=60, t=50, b=60),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=60, r=60, t=78, b=104),
+        legend=dict(orientation="h", yanchor="top", y=-0.20, xanchor="left", x=0),
     )
     fig.update_yaxes(title_text=y1_name, secondary_y=False)
     if invert_y2:
@@ -188,10 +190,10 @@ def make_dual_axis_chart(
         for ann in annotations:
             y_pos = y1_max * 0.95 if ann.get("y_pos") == "top" else y1_min * 0.95
             fig.add_annotation(
-                x=x_str[0], y=y_pos,
+                x=x_str[0], y=y_pos, xshift=6,
                 text=ann["text"], showarrow=False,
-                font=dict(color=ann.get("color", "black"), size=11, weight="bold"),
-                xanchor="left",
+                font=dict(color=ann.get("color", JGP_PRETO), size=11, weight="bold"),
+                xanchor="left", bgcolor="rgba(255,255,255,0.78)", borderpad=3,
             )
         fig.add_hline(y=0, line_color="black", line_width=0.5)
 
@@ -208,7 +210,7 @@ def make_dual_series_chart(
     y1_name: str = "Fondos de Pensiones",
     y2_name: str = "No Residentes",
     y1_color: str = JGP_VERDE,
-    y2_color: str = "darkorange",
+    y2_color: str = JGP_AZUL,
 ) -> str:
     plot_df = df.dropna(subset=[x, y1, y2]).copy()
     x_str = _date_strings(plot_df[x])
@@ -226,7 +228,7 @@ def make_dual_series_chart(
     )
     fig.update_layout(
         title=title, template="jgp", height=500,
-        margin=dict(l=60, r=60, t=50, b=60),
+        margin=dict(l=60, r=60, t=64, b=60),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
     fig.update_yaxes(title_text=y1_name, secondary_y=False)
@@ -274,9 +276,9 @@ def make_offshore_corr_chart(corr_df: pd.DataFrame, title: str) -> str:
 
     fig.update_layout(
         title=title, template="jgp", height=420,
-        margin=dict(l=60, r=20, t=50, b=70),
+        margin=dict(l=60, r=20, t=64, b=70),
         yaxis_title="correlação entre as pernas",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
     )
     fig.update_yaxes(range=[-1.05, 1.05], dtick=0.5)
     _apply_category_xaxis(fig)
@@ -341,7 +343,7 @@ def make_swap_line_chart(
         title=dict(text=title, font=dict(size=12)),
         template="jgp",
         height=380,
-        margin=dict(l=50, r=15, t=44, b=96),
+        margin=dict(l=50, r=15, t=58, b=96),
         yaxis_title="DV01",
         legend=dict(
             orientation="h", yanchor="top", y=-0.30, xanchor="left", x=0,
@@ -367,7 +369,7 @@ def make_swap_delta_bars(
     ))
     fig.update_layout(
         title=title, template="jgp", height=280,
-        margin=dict(l=100, r=20, t=50, b=40),
+        margin=dict(l=100, r=20, t=52, b=44),
         xaxis_title="DV01", yaxis_title="",
         showlegend=False,
     )
@@ -402,7 +404,7 @@ def make_colombia_line_chart(
     fig.update_layout(
         title="Saldos de compra e venda de contratos fwd (USD million)",
         template="jgp", height=400,
-        margin=dict(l=50, r=20, t=50, b=60),
+        margin=dict(l=50, r=20, t=64, b=60),
         yaxis_title="USD million",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
@@ -433,9 +435,9 @@ def _side_labels(fig: go.Figure, topo: str, pe: str) -> None:
         (0.03, "bottom", pe, JGP_VERMELHO),
     ]:
         fig.add_annotation(
-            xref="paper", x=0.01, y=y, yref="paper", text=text, showarrow=False,
+            xref="paper", x=0.012, y=y, yref="paper", text=text, showarrow=False,
             font=dict(color=color, size=11), xanchor="left", yanchor=anchor,
-            bgcolor="rgba(255,255,255,0.75)",
+            bgcolor="rgba(255,255,255,0.75)", borderpad=3,
         )
 
 
@@ -499,7 +501,7 @@ def make_afp_5d_bars(legs: dict) -> str:
             f"<span style='font-size:13px;color:#666'>({janela})</span>"
         ),
         template="jgp", height=460,
-        margin=dict(l=60, r=20, t=70, b=80),
+        margin=dict(l=60, r=20, t=84, b=80),
         yaxis_title="USD million acumulado",
         showlegend=False, bargap=0.45,
     )
@@ -554,7 +556,7 @@ def make_weekly_legs_bars(
         barmode="relative" if stacked else "group",
         bargap=0.2 if stacked else 0.25, bargroupgap=0.05,
         template="jgp", height=440,
-        margin=dict(l=60, r=20, t=50, b=70),
+        margin=dict(l=60, r=20, t=64, b=70),
         yaxis_title=f"USD million (+ compra de {'USD' if usd else 'CLP'})",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
@@ -604,7 +606,7 @@ def make_afp_level_line(afp_df: pd.DataFrame, title: str) -> str:
     fig.add_hline(y=0, line_color="black", line_width=0.5)
     fig.update_layout(
         title=title, template="jgp", height=400,
-        margin=dict(l=60, r=20, t=50, b=60),
+        margin=dict(l=60, r=20, t=64, b=60),
         yaxis_title="USD million (+ AFP long USD)",
         showlegend=False,
     )
@@ -628,7 +630,7 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
     lim = d[col].abs().max() * 1.25
     fig.update_layout(
         title=title, template="jgp", height=400,
-        margin=dict(l=60, r=20, t=50, b=60),
+        margin=dict(l=60, r=20, t=64, b=60),
         yaxis_title="USD million (+ compra de USD)",
         showlegend=False,
     )
@@ -668,7 +670,7 @@ def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
 
     fig.update_layout(
         title=title, template="jgp", height=440,
-        margin=dict(l=60, r=20, t=50, b=70),
+        margin=dict(l=60, r=20, t=64, b=70),
         yaxis_title="USD million (+ compra de CLP)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
@@ -752,7 +754,7 @@ def make_sector_weekly_stacked(
     fig.update_layout(
         title=title, barmode="relative", bargap=0.2,
         template="jgp", height=560,
-        margin=dict(l=60, r=20, t=50, b=170),
+        margin=dict(l=60, r=20, t=64, b=170),
         yaxis_title="USD million (+ compra de USD)",
         # A legenda tem oito entradas e quebra em duas linhas. Empurrada para
         # baixo dos rotulos de data, com margem inferior que cabe as duas coisas.
@@ -834,7 +836,7 @@ def make_afp_levels_chart(
 
     fig.update_layout(
         title=title, template="jgp", height=470,
-        margin=dict(l=70, r=20, t=82, b=70),
+        margin=dict(l=70, r=20, t=96, b=70),
         yaxis_title="USD million desde a âncora (+ compra de USD)",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",

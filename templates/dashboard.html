@@ -286,7 +286,7 @@
   /* Tabelas emitidas pelo table_builder.py (.data-table) na moldura JGP:
      cabecalho verde, numeros tabulares, agregados com risco em cima. */
   table.data-table{border-collapse:collapse;font-size:12px;width:100%;min-width:0;max-width:none}
-  table.data-table th,table.data-table td{border:1px solid var(--line);padding:3px 8px;white-space:nowrap}
+  table.data-table th,table.data-table td{border:1px solid var(--line);padding:5px 10px;white-space:nowrap}
   table.data-table thead th{background:var(--green);color:#fff;font-weight:700;text-align:center;
     border-color:var(--green-dark)}
   table.data-table thead th:first-child{text-align:left}
@@ -295,16 +295,27 @@
   table.data-table tbody tr:hover td{background:var(--jgp-green-tint)}
   table.data-table tr.row-agg td{background:var(--sec);font-weight:700;
     border-top:2px solid var(--rule-strong)}
-  .table-title{font-size:14px;font-weight:700;color:var(--chart-title);margin:0 0 1px;letter-spacing:-.01em}
-  .table-subtitle{font-size:11px;color:var(--chart-sub);margin:0 0 6px;line-height:1.35}
+  .table-title{font-size:14px;font-weight:700;color:var(--chart-title);margin:0 0 2px;letter-spacing:-.01em}
+  .table-subtitle{font-size:11px;color:var(--chart-sub);margin:0 0 10px;line-height:1.4}
 
   /* Notas de leitura dentro de um card. */
-  .note{font-size:11.5px;line-height:1.55;color:var(--ink-secondary);
-    border-top:1px solid var(--rule-faint);margin-top:12px;padding-top:10px}
+  .note{font-size:11.5px;line-height:1.6;color:var(--ink-secondary);
+    border-top:1px solid var(--rule-faint);margin-top:14px;padding-top:12px}
   .note-flush{border-top:none;margin-top:0;padding-top:0}
 
-  /* Sem page-header, o primeiro h2 da aba encosta na tabbar: nao precisa da
-     margem de separacao, nao ha nada acima dele dentro do painel. */
+  /* ==== Respiro ====
+     A casca e desenhada para texto corrido; aqui cada card carrega um grafico
+     ou uma tabela densa, entao o padrao ficava apertado. */
+  /* O card do skill tem .5rem .6rem: pouco para uma moldura de figura. */
+  .card{padding:.75rem .9rem .65rem}
+  /* Cabecalho verde com um pouco mais de ar que as linhas de dado. */
+  table.data-table thead th{padding:6px 10px}
+  /* Entre o texto de apoio da secao e o primeiro card. */
+  .lead,.sub{margin-bottom:12px;line-height:1.6}
+  /* h2 tem regua tracejada logo abaixo: afasta do texto que vem depois. */
+  h2{margin:2rem 0 .9rem;padding-bottom:.5rem}
+  /* Sem page-header o primeiro h2 encosta na tabbar, e nao ha nada acima dele
+     dentro do painel para separar. */
   .tab > h2:first-child{margin-top:.2rem}
 
 </style>
