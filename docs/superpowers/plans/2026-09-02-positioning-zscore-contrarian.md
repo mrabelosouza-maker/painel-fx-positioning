@@ -844,7 +844,7 @@ def resumir(
 Run: `python -m pytest tests/positioning_zscore/test_buckets.py -v`
 Expected: todos passam (17 da Task 3 mais 10 novos).
 
-Se `test_resumir_ignora_linhas_sem_retorno` falhar por diferença de contagem, o motivo provável é que `n_obs` já exclui z NaN — ajuste a asserção do teste para comparar com a contagem exata que `resumir` produz, não a implementação.
+Se `test_resumir_ignora_linhas_sem_retorno` falhar, a asserção está certa e a implementação está errada: `n_obs` tem de contar exatamente as linhas com bucket e retorno definidos. Conserte `resumir`, **não** o teste.
 
 - [ ] **Step 5: Commit**
 
