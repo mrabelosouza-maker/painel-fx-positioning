@@ -18,7 +18,6 @@ from config import SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
-    build_net_comparison,
     build_all_sectors_flow, build_sector_window_table, build_sector_weekly,
     build_afp_spot_flow, build_afp_5d_legs, build_afp_weekly_legs,
     build_afp_rolling_legs, build_afp_levels,
@@ -32,7 +31,6 @@ from chart_builder import (
     make_swap_delta_bars,
     make_colombia_line_chart,
     make_weekly_legs_bars,
-    make_net_comparison_chart,
     make_sector_weekly_stacked,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
@@ -220,16 +218,13 @@ def build_swap_section(swap_data):
     return ctx
 
 
-def build_offshore_adj_section(dados, afp_wk=None):
+def build_offshore_adj_section(dados):
     """Gera charts e tables para a aba Offshore Ajustado.
 
     Toda a aba na convencao compra-de-USD: positivo = compra de USD (venda de
     CLP), negativo = venda de USD. Vale para o nivel, para os deltas e para as
     duas pernas semanais — as series cruas do BCCh vem na otica do banco
     residente e entram invertidas.
-
-    `afp_wk` e o semanal dos fundos de pensao, calculado uma vez no main e
-    reaproveitado aqui para o comparativo de net entre os dois setores.
     """
     ctx = {}
     adj_df = build_offshore_adjusted(dados)
@@ -239,11 +234,8 @@ def build_offshore_adj_section(dados, afp_wk=None):
     # correlacao e invariante a inversao conjunta das duas pernas.
     wk = build_weekly_legs(adj_df)
     ctx["offadj_weekly_bars"] = make_weekly_legs_bars(
-        wk, "SEMANAL: as duas pernas do fluxo do offshore", usd=True,
-    )
-    ctx["offadj_net_vs_afp"] = make_net_comparison_chart(
-        build_net_comparison(afp_wk if afp_wk is not None else pd.DataFrame(), wk),
-        "SEMANAL: net dos fundos de pensão vs net do offshore",
+        wk, "5 PREGÕES: as duas pernas do fluxo do offshore — empilhado",
+        stacked=True, usd=True, periodo="5 pregões",
     )
     ctx["offadj_corr"] = make_offshore_corr_chart(
         build_offshore_corr(adj_df),
@@ -484,14 +476,12 @@ def main():
     brt = timezone(timedelta(hours=-3))
     context["build_timestamp"] = datetime.now(brt).strftime("%Y-%m-%d %H:%M BRT")
 
-    # O semanal dos AFPs serve as duas abas: a propria e o comparativo de net na
-    # de Offshore Ajustado. Calcular uma vez evita refazer o fetch da serie spot.
     afp_df = build_afp_spot_flow(dados)
     afp_wk = build_afp_weekly_legs(afp_df)
 
     context.update(build_fx_section(dados))
     context.update(build_afp_flow_section(afp_df, afp_wk))
-    context.update(build_offshore_adj_section(dados, afp_wk))
+    context.update(build_offshore_adj_section(dados))
     context.update(build_sectors_section(dados))
     context.update(build_swap_section(swap_data))
     context.update(build_colombia_section(col_data))

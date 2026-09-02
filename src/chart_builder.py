@@ -669,6 +669,7 @@ def make_afp_5d_bars(legs: dict) -> str:
 def make_weekly_legs_bars(
     wk: pd.DataFrame, title: str, weeks_default: int = 12,
     stacked: bool = False, usd: bool = False, date_col: str = "Semana",
+    periodo: str = "semana",
 ) -> str:
     """Barras por semana com as duas pernas e a linha do net.
 
@@ -682,13 +683,18 @@ def make_weekly_legs_bars(
       (offshore ajustado).
     - `date_col`: "Semana" para o agregado semanal, "Data" para as versoes
       diarias rolantes. `weeks_default` passa a contar observacoes, nao semanas.
+    - `periodo`: como o bucket se chama na legenda e no hover. A aba de Offshore
+      Ajustado agrega por 5 pregoes, nao por semana de calendario, e o rotulo
+      tem de dizer isso.
     """
     if wk.empty:
         return "<p>Dados indisponíveis</p>"
 
     x_str = _date_strings(wk[date_col])
     series = [
-        ("ndf_wk", "NDF (Δ saldo na semana)", AFP_LEG_COLORS["ndf"]),
+        # Ponto medio em vez de preposicao: "na semana" e "em 5 pregoes" pedem
+        # regencias diferentes, e a legenda serve as duas abas.
+        ("ndf_wk", f"NDF (Δ saldo · {periodo})", AFP_LEG_COLORS["ndf"]),
         ("bcch_wk", "Spot observado (BCCh)", AFP_LEG_COLORS["bcch"]),
     ]
 
@@ -697,13 +703,13 @@ def make_weekly_legs_bars(
         fig.add_trace(go.Bar(
             x=x_str, y=wk[col], name=name,
             marker=dict(color=color, opacity=0.62 if stacked else 1.0),
-            hovertemplate=f"semana de %{{x}}<br>{name}: %{{y:+,.0f}} mm USD<extra></extra>",
+            hovertemplate=f"{periodo} até %{{x}}<br>{name}: %{{y:+,.0f}} mm USD<extra></extra>",
         ))
     fig.add_trace(go.Scatter(
         x=x_str, y=wk["net_wk"], name="Net (NDF + spot)", mode="lines+markers",
         line=dict(color="black", width=1.5),
         marker=dict(color="black", size=5, symbol="diamond"),
-        hovertemplate="semana de %{x}<br>net: %{y:+,.0f} mm USD<extra></extra>",
+        hovertemplate=f"{periodo} até %{{x}}<br>net: %{{y:+,.0f}} mm USD<extra></extra>",
     ))
     fig.add_hline(y=0, line_color="black", line_width=0.8)
 
@@ -793,49 +799,6 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
     fig.update_yaxes(range=[-lim, lim])
     _usd_side_labels(fig)
     _apply_category_xaxis(fig)
-    return _to_html(fig)
-
-
-# Mesmas cores que a aba de setores da a esses dois: a cor segue a entidade, para
-# o leitor reconhecer as series entre abas.
-NET_SECTOR_COLORS = {"pension": "#377eb8", "offshore": "#ff7f00", "total": "#111827"}
-
-
-def make_net_comparison_chart(df: pd.DataFrame, title: str) -> str:
-    """Net semanal dos fundos de pensao, do offshore e a soma, em compra-de-USD."""
-    if df.empty:
-        return "<p>Dados indisponíveis</p>"
-
-    x_str = _date_strings(df["Semana"])
-    fig = go.Figure()
-    for col, name, color, dash, width in [
-        ("net_pension", "Fundos de pensão (NDF + spot)",
-         NET_SECTOR_COLORS["pension"], "solid", 1.8),
-        ("net_offshore", "Offshore (NDF + spot)",
-         NET_SECTOR_COLORS["offshore"], "solid", 1.8),
-        # A soma vai tracejada e em preto para ler como serie derivada, nao como
-        # um terceiro setor.
-        ("net_total", "Soma dos dois", NET_SECTOR_COLORS["total"], "dash", 2.2),
-    ]:
-        fig.add_trace(go.Scatter(
-            x=x_str, y=df[col], name=name, mode="lines",
-            line=dict(color=color, width=width, dash=dash),
-            hovertemplate=f"semana de %{{x}}<br>{name}: %{{y:+,.0f}} mm USD<extra></extra>",
-        ))
-    fig.add_hline(y=0, line_color="black", line_width=0.8)
-
-    fig.update_layout(
-        title=title, template="jgp", height=440,
-        margin=dict(l=60, r=20, t=64, b=70),
-        yaxis_title="USD million (+ compra de USD)",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        hovermode="x unified",
-    )
-    vals = pd.concat([df["net_pension"], df["net_offshore"], df["net_total"]]).dropna()
-    lim = vals.abs().max() * 1.15 if len(vals) else 1.0
-    fig.update_yaxes(range=[-lim, lim])
-    _usd_side_labels(fig)
-    _apply_category_xaxis(fig, nticks=14)
     return _to_html(fig)
 
 

@@ -125,6 +125,11 @@ OFFSHORE_ADJ_CUTOVER = "2025-12-15"  # a partir desta data, soma spot acumulado
 # media entre as linhas sobe de 8% para 25% da altura do painel.
 OFFSHORE_ADJ_DEFAULT_START = OFFSHORE_ADJ_CUTOVER
 
+# Tamanho do bloco do grafico de fluxo por perna, em PREGOES. Semana de
+# calendario tem 3, 4 ou 5 pregoes dependendo de feriado, e barras de janelas
+# diferentes nao se comparam; 5 pregoes e sempre 5 pregoes.
+OFFSHORE_WEEKLY_SESSIONS = 5
+
 # ──────────────────────────────────────────────────────────────────────
 # Colombia
 # ──────────────────────────────────────────────────────────────────────

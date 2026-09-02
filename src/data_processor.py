@@ -11,6 +11,7 @@ from config import (
     CODIGO_CAMBIO,
     DURATIONS,
     OFFSHORE_ADJ_CUTOVER,
+    OFFSHORE_WEEKLY_SESSIONS,
     SERIES_BANCOS,
     SERIES_FX_ALL,
     SERIES_NAMES_ALL,
@@ -315,46 +316,52 @@ def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
     ].dropna(subset=["Offshore_Adj"])
 
 
-def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
-    """Agrega as duas pernas do offshore por semana (sexta a sexta), em compra-de-USD.
+def build_weekly_legs(
+    adj_df: pd.DataFrame, sessoes: int = OFFSHORE_WEEKLY_SESSIONS,
+) -> pd.DataFrame:
+    """Agrega as duas pernas do offshore por bloco de pregoes, em compra-de-USD.
 
-    Mesma convencao e mesmos nomes de coluna que build_afp_weekly_legs, para os
-    dois setores usarem o mesmo grafico e poderem ser comparados lado a lado:
-    acima de zero = compra de USD. As series cruas do BCCh vem na otica do banco
+    Blocos NAO sobrepostos de `sessoes` pregoes, ancorados no fim: o mais
+    recente fecha no ultimo dado e o mais antigo cai se estiver incompleto.
+    Blocos de pregao, e nao semana de calendario (W-FRI), porque a semana civil
+    tem 3, 4 ou 5 pregoes dependendo de feriado, e uma barra de 3 dias ao lado
+    de outra de 5 nao se compara — mesma convencao de AFP_DELTA_SESSIONS.
+
+    Acima de zero = compra de USD. As series cruas do BCCh vem na otica do banco
     residente (positivo = cliente comprando CLP), entao as duas entram com o
-    sinal invertido — sem isso o comparativo com o net dos fundos de pensao, que
-    ja sai em compra-de-USD, somaria as duas series em sinais opostos.
+    sinal invertido.
 
-      ndf_wk  : variacao semanal do saldo de NDF
-      bcch_wk : soma semanal do fluxo spot liquido
-      net_wk  : soma das duas = variacao semanal da posicao ajustada
+      ndf_wk  : variacao do saldo de NDF de ponta a ponta do bloco
+      bcch_wk : soma do fluxo spot liquido no bloco
+      net_wk  : soma das duas = variacao da posicao ajustada no bloco
     """
-    d = adj_df.set_index("Data").sort_index()
+    d = adj_df.dropna(subset=["No residentes"]).set_index("Data").sort_index()
+    n = len(d)
+    if n < 2 * sessoes:
+        return pd.DataFrame(columns=["Semana", "ndf_wk", "bcch_wk", "net_wk"])
+
+    ndf, spot = -d["No residentes"], -d["spot_neto"]
+
+    # bloco 0 = os `sessoes` pregoes mais recentes, 1 = os 5 anteriores, etc.
+    bloco = pd.Series((n - 1 - np.arange(n)) // sessoes, index=d.index)
+    completos = bloco.value_counts()
+    bloco = bloco[bloco.map(completos) == sessoes]
+    if bloco.empty:
+        return pd.DataFrame(columns=["Semana", "ndf_wk", "bcch_wk", "net_wk"])
+
+    # bloco decrescente = data crescente, para o diff andar no sentido do tempo
+    ordem = sorted(bloco.unique(), reverse=True)
+    fecha = ndf.loc[bloco.index].groupby(bloco).last().reindex(ordem)
     wk = pd.DataFrame({
-        "ndf_wk": (-d["No residentes"]).resample("W-FRI").last().diff(),
-        "bcch_wk": (-d["spot_neto"]).resample("W-FRI").sum(),
-    }).dropna()
+        "Semana": pd.Series(bloco.index, index=bloco.index)
+                    .groupby(bloco).last().reindex(ordem).values,
+        # Ponta a ponta: o nivel no fim do bloco menos o nivel no fim do bloco
+        # anterior. Por isso o bloco mais antigo sai (nao tem anterior).
+        "ndf_wk": fecha.diff().values,
+        "bcch_wk": spot.loc[bloco.index].groupby(bloco).sum().reindex(ordem).values,
+    }).dropna(subset=["ndf_wk"])
     wk["net_wk"] = wk["ndf_wk"] + wk["bcch_wk"]
-    return wk.rename_axis("Semana").reset_index()
-
-
-def build_net_comparison(afp_wk: pd.DataFrame, off_wk: pd.DataFrame) -> pd.DataFrame:
-    """Junta o net semanal dos fundos de pensao, o do offshore e a soma dos dois.
-
-    As duas ja saem em compra-de-USD das suas funcoes semanais, entao vao para o
-    mesmo eixo sem conversao. Uniao das semanas: as duas series comecam em datas
-    diferentes e cada linha fica com o buraco onde nao tem dado.
-    """
-    if afp_wk.empty or off_wk.empty:
-        return pd.DataFrame()
-    out = afp_wk[["Semana", "net_wk"]].rename(columns={"net_wk": "net_pension"}).merge(
-        off_wk[["Semana", "net_wk"]].rename(columns={"net_wk": "net_offshore"}),
-        on="Semana", how="outer",
-    ).sort_values("Semana")
-    # min_count=2: o total so existe quando os dois setores existem. Somar com um
-    # deles faltando daria um "total" que na verdade e um setor so.
-    out["net_total"] = out[["net_pension", "net_offshore"]].sum(axis=1, min_count=2)
-    return out.dropna(subset=["net_pension", "net_offshore"], how="all").reset_index(drop=True)
+    return wk.reset_index(drop=True)
 
 
 def build_offshore_corr(
