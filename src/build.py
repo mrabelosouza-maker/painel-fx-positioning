@@ -14,9 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import (
-    SECTOR_WINDOWS, OFFSHORE_ADJ_CUTOVER, OFFSHORE_ADJ_DEFAULT_START,
-)
+from config import SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
@@ -279,16 +277,6 @@ def build_offshore_adj_section(dados, afp_wk=None):
         default_start=OFFSHORE_ADJ_DEFAULT_START,
         usd_labels=True,
         fit_1a1=True,
-        # Um clique por janela, no canto do grafico. O primeiro e a janela em
-        # que o painel abre; os outros expandem para tras, ate a amostra toda.
-        # Expandir para antes do cutover mistura duas definicoes de serie (ali a
-        # perna de spot ainda nao entra), e o rotulo do botao e o que avisa.
-        botoes_janela=[
-            ("Desde o cutover", OFFSHORE_ADJ_CUTOVER),
-            ("1 ano", 252),
-            ("2 anos", 504),
-            ("Amostra toda", None),
-        ],
     )
 
     # Tabela: ultimas 5 linhas com deltas + % USDCLP
