@@ -63,8 +63,35 @@ SHIM_CSS = """
   .note{font-size:11.5px;line-height:1.55;color:var(--ink-secondary);
     border-top:1px solid var(--rule-faint);margin-top:12px;padding-top:10px}
   .note-flush{border-top:none;margin-top:0;padding-top:0}
+
+  /* Sem page-header, o primeiro h2 da aba encosta na tabbar: nao precisa da
+     margem de separacao, nao ha nada acima dele dentro do painel. */
+  .tab > h2:first-child{margin-top:.2rem}
 """
 css = css.rstrip() + "\n" + SHIM_CSS
+
+# O painel nao usa o page-header da casca (titulo + lead + meta): ele repetia em
+# toda aba e comia ~230px de altura. A data do build vive na pill da topnav e no
+# rodape. Sem ele o respiro de 2rem do topo vira 1rem.
+for antes, depois in [
+    ("  .main-content{padding:2rem 1.8rem 4rem;min-width:0;position:relative}",
+     "  .main-content{padding:1rem 1.8rem 4rem;min-width:0;position:relative}"),
+    ("    .main-content{padding:2rem 1.4rem 4rem}",
+     "    .main-content{padding:1rem 1.4rem 4rem}"),
+]:
+    assert antes in css
+    css = css.replace(antes, depois)
+
+# Sumario fechado por padrao neste painel: sao 43 graficos e a largura vale mais
+# que a lista de secoes. Quem abrir uma vez continua com ele aberto (o '0' fica
+# no localStorage); a casca vinha com o padrao inverso.
+old = "      let col = false; try { col = localStorage.getItem(key) === '1'; } catch (e) {}"
+new = (
+    "      let col = true;\n"
+    "      try { const v = localStorage.getItem(key); if (v !== null) col = v === '1'; } catch (e) {}"
+)
+assert old in chrome
+chrome = chrome.replace(old, new)
 
 # ── JS do painel: retema os graficos ja renderizados e cuida do reflow ──
 PANEL_JS = """

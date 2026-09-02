@@ -131,7 +131,7 @@
     font-feature-settings:'tnum' 1;letter-spacing:.02em}
 
   /* ==== Conteúdo principal ==== */
-  .main-content{padding:2rem 1.8rem 4rem;min-width:0;position:relative}
+  .main-content{padding:1rem 1.8rem 4rem;min-width:0;position:relative}
 
   /* ==== Header da página ==== */
   .page-header{margin-bottom:2.6rem;padding-bottom:1.6rem;border-bottom:1px solid var(--rule-strong);position:relative}
@@ -236,7 +236,7 @@
   @media (max-width:1100px){
     .page-wrapper{grid-template-columns:1fr}
     .sidebar{display:none}
-    .main-content{padding:2rem 1.4rem 4rem}
+    .main-content{padding:1rem 1.4rem 4rem}
   }
   /* tabela de projeção */
   .ptbl-wrap{overflow-x:auto;margin-bottom:8px;border:1px solid var(--grid);border-radius:6px;max-height:640px}
@@ -303,6 +303,10 @@
     border-top:1px solid var(--rule-faint);margin-top:12px;padding-top:10px}
   .note-flush{border-top:none;margin-top:0;padding-top:0}
 
+  /* Sem page-header, o primeiro h2 da aba encosta na tabbar: nao precisa da
+     margem de separacao, nao ha nada acima dele dentro do painel. */
+  .tab > h2:first-child{margin-top:.2rem}
+
 </style>
 </head>
 <body>
@@ -337,19 +341,6 @@
   <nav class="sidebar" id="sidebar"><div class="sidebar-eyebrow">Sumário</div></nav>
 
   <main class="main-content">
-    <header class="page-header fade-up delay-1">
-      <div class="page-eyebrow"><span class="tag">Posicionamento</span></div>
-      <h1 class="page-title">Painel FX Positioning</h1>
-      <p class="lead">Posição em câmbio dos setores no mercado chileno &mdash; saldo de NDF e fluxo spot
-        publicados pelo Banco Central de Chile &mdash; mais a curva de swap cámara e os saldos forward
-        em USDCOP.</p>
-      <dl class="page-meta">
-        <div class="meta-item"><dt>Fonte</dt><dd>BCCh &middot; Banrep &middot; Bloomberg</dd></div>
-        <div class="meta-item"><dt>Atualizado</dt><dd>{{ build_timestamp }}</dd></div>
-        <div class="meta-item"><dt>Macro</dt><dd>JGP Emerging Markets</dd></div>
-      </dl>
-    </header>
-
     <!-- ══════════════════ FUNDOS DE PENSÃO ══════════════════ -->
     <div id="tab-pension" class="tab on">
       <h2>Posição e resumo</h2>
@@ -690,7 +681,8 @@ window.JGPChrome = (function () {
         updateProgress();
         window.dispatchEvent(new Event('resize'));
       };
-      let col = false; try { col = localStorage.getItem(key) === '1'; } catch (e) {}
+      let col = true;
+      try { const v = localStorage.getItem(key); if (v !== null) col = v === '1'; } catch (e) {}
       applyNav(col);
       navToggle.addEventListener('click', () => {
         const c = !wrapper.classList.contains('nav-collapsed');
