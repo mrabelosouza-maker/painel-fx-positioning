@@ -58,10 +58,13 @@ def build_fx_section(dados):
     """Gera charts e tables para as 4 secoes FX padrao + dual-axis."""
     ctx = {}
 
+    # Todas as abas medem o mesmo horizonte, em PREGOES (1, 5 e 21 sessoes).
+    # Dia corrido dava janela erratica — 7 corridos cobrem 5 pregoes na sexta e 4
+    # na segunda depois de feriado — e cada aba media uma coisa diferente.
     fx_labels = {
         "delta_1d": "Delta 1D",
-        "delta_7d": "Delta 7D",
-        "delta_28d": "Delta 28D",
+        "delta_5d": "Delta 5D",
+        "delta_21d": "Delta 21D",
         "pct_usdclp": "% USDCLP",
     }
 
@@ -83,12 +86,6 @@ def build_fx_section(dados):
     df_pension = _add_pct_usdclp(
         compute_deltas(dados_pension, col, [1, 5, 21], sessions=True)
     )
-    pension_labels = {
-        "delta_1d": "Delta 1D",
-        "delta_5d": "Delta 5D",
-        "delta_21d": "Delta 21D",
-        "pct_usdclp": "% USDCLP",
-    }
     ctx["pension_line"] = make_line_chart(
         dados_pension, "Data", col,
         "Fondos de Pensiones: Posição em USD (USD million)",
@@ -96,7 +93,7 @@ def build_fx_section(dados):
     )
     ctx["pension_table"] = make_summary_table(
         df_pension, [col, "delta_1d", "delta_5d", "pct_usdclp"],
-        col_labels={col: "Nivel", **pension_labels}, decimals=1,
+        col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
     ctx["pension_delta5"] = make_bar_chart(
         df_pension, "Data", "delta_5d",
@@ -121,12 +118,6 @@ def build_fx_section(dados):
     df_off = _add_pct_usdclp(
         compute_deltas(dados_off, col, [1, 5, 21], sessions=True)
     )
-    offshore_labels = {
-        "delta_1d": "Delta 1D",
-        "delta_5d": "Delta 5D",
-        "delta_21d": "Delta 21D",
-        "pct_usdclp": "% USDCLP",
-    }
     ctx["offshore_line"] = make_line_chart(
         dados_off, "Data", col,
         "No Residentes (Offshore): Posição em USD (USD million)",
@@ -134,7 +125,7 @@ def build_fx_section(dados):
     )
     ctx["offshore_table"] = make_summary_table(
         df_off, [col, "delta_1d", "delta_5d", "pct_usdclp"],
-        col_labels={col: "Nivel", **offshore_labels}, decimals=1,
+        col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
     ctx["offshore_delta5"] = make_bar_chart(
         df_off, "Data", "delta_5d",
@@ -149,25 +140,37 @@ def build_fx_section(dados):
 
     # ── CORPORATE ──
     col = "Empresas sector real"
-    df_corp = _add_pct_usdclp(compute_deltas(dados, col, [1, 7, 28]))
+    df_corp = _add_pct_usdclp(compute_deltas(dados, col, [1, 5, 21], sessions=True))
     ctx["corporate_line"] = make_line_chart(dados, "Data", col, "Empresas Sector Real: Net Short (USD million)")
     ctx["corporate_table"] = make_summary_table(
-        df_corp, [col, "delta_1d", "delta_7d", "pct_usdclp"],
+        df_corp, [col, "delta_1d", "delta_5d", "pct_usdclp"],
         col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
-    ctx["corporate_delta7"] = make_bar_chart(df_corp, "Data", "delta_7d", "DELTA 7 DIAS: Empresas Sector Real (USD million)")
-    ctx["corporate_delta28"] = make_bar_chart(df_corp, "Data", "delta_28d", "DELTA 28 DIAS: Empresas Sector Real (USD million)")
+    ctx["corporate_delta5"] = make_bar_chart(
+        df_corp, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: Empresas Sector Real (USD million)",
+    )
+    ctx["corporate_delta21"] = make_bar_chart(
+        df_corp, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: Empresas Sector Real (USD million)",
+    )
 
     # ── BANCOS ──
     col = "PosicaoBancos"
-    df_banks = _add_pct_usdclp(compute_deltas(dados, col, [1, 7, 28]))
+    df_banks = _add_pct_usdclp(compute_deltas(dados, col, [1, 5, 21], sessions=True))
     ctx["banks_line"] = make_line_chart(dados, "Data", col, "Posição dos Bancos: Net Spot (USD million)")
     ctx["banks_table"] = make_summary_table(
-        df_banks, [col, "delta_1d", "delta_7d", "pct_usdclp"],
+        df_banks, [col, "delta_1d", "delta_5d", "pct_usdclp"],
         col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
-    ctx["banks_delta7"] = make_bar_chart(df_banks, "Data", "delta_7d", "DELTA 7 DIAS: Posição dos Bancos (USD million)")
-    ctx["banks_delta28"] = make_bar_chart(df_banks, "Data", "delta_28d", "DELTA 28 DIAS: Posição dos Bancos (USD million)")
+    ctx["banks_delta5"] = make_bar_chart(
+        df_banks, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: Posição dos Bancos (USD million)",
+    )
+    ctx["banks_delta21"] = make_bar_chart(
+        df_banks, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: Posição dos Bancos (USD million)",
+    )
 
     # ── TOTAL VS USDCLP ──
     dados_total = dados.copy()
@@ -362,7 +365,7 @@ def build_afp_flow_section(afp_df, wk):
 def build_sectors_section(dados):
     """Gera a aba Todos os Setores: NDF + spot de cada setor, em compra-de-CLP.
 
-    Uma tabela por horizonte (1, 7 e 28 dias) mais tres graficos empilhados
+    Uma tabela por horizonte (1, 5 e 21 pregoes) mais tres graficos empilhados
     semanais: net, a perna de NDF e a perna de spot. As tabelas fecham por construcao: as seis folhas residentes somam
     Residentes no bancos, e este mais No residentes soma o monto vigente neto.
     """
@@ -376,9 +379,11 @@ def build_sectors_section(dados):
             **{f"sectors_table_{d}": "<p>—</p>" for d in SECTOR_WINDOWS},
         }
 
-    for dias in SECTOR_WINDOWS:
-        tab, inicio, fim = build_sector_window_table(long_df, dias)
-        ctx[f"sectors_table_{dias}"] = make_sector_flow_table(tab, dias, inicio, fim)
+    for sessoes in SECTOR_WINDOWS:
+        tab, inicio, fim = build_sector_window_table(long_df, sessoes)
+        ctx[f"sectors_table_{sessoes}"] = make_sector_flow_table(
+            tab, sessoes, inicio, fim
+        )
 
     # Os tres saem da mesma funcao e do mesmo desenho, para dar para comparar
     # barra a barra: de onde veio o net daquela semana, do forward ou do spot.
@@ -403,8 +408,8 @@ def build_colombia_section(col_data):
     if series.empty:
         ctx["colombia_line"] = "<p>Dados Colombia indisponíveis</p>"
         ctx["colombia_table"] = "<p>—</p>"
-        ctx["colombia_delta7"] = "<p>—</p>"
-        ctx["colombia_delta28"] = "<p>—</p>"
+        ctx["colombia_delta5"] = "<p>—</p>"
+        ctx["colombia_delta21"] = "<p>—</p>"
         return ctx
 
     ctx["colombia_line"] = make_colombia_line_chart(series)
@@ -412,17 +417,22 @@ def build_colombia_section(col_data):
         table_data, ["Nivel", "Delta", "% USDCOP"], date_col="Fecha", decimals=1
     )
 
-    # Deltas (dias corridos)
-    series_deltas = compute_deltas(series, "Extranjero", [7, 28], date_col="Fecha")
+    # Deltas em PREGOES (5 e 21), como as abas do Chile. `sessions=True` conta
+    # linha, entao o filtro de dia de semana e necessario: a serie do Banrep tem
+    # ~70 linhas de sabado/domingo ate 2022, e cada uma inflaria a janela.
+    series_pregoes = series[series["Fecha"].dt.dayofweek < 5]
+    series_deltas = compute_deltas(
+        series_pregoes, "Extranjero", [5, 21], date_col="Fecha", sessions=True
+    )
 
-    ctx["colombia_delta7"] = make_bar_chart(
-        series_deltas, "Fecha", "delta_7d",
-        "COLOMBIA: DELTA 7 DIAS SALDO FWD OFFSHORE (USD million)",
+    ctx["colombia_delta5"] = make_bar_chart(
+        series_deltas, "Fecha", "delta_5d",
+        "COLOMBIA: DELTA 5 PREGÕES SALDO FWD OFFSHORE (USD million)",
         date_filter="2024-01-01",
     )
-    ctx["colombia_delta28"] = make_bar_chart(
-        series_deltas, "Fecha", "delta_28d",
-        "COLOMBIA: DELTA 28 DIAS SALDO FWD OFFSHORE (USD million)",
+    ctx["colombia_delta21"] = make_bar_chart(
+        series_deltas, "Fecha", "delta_21d",
+        "COLOMBIA: DELTA 21 PREGÕES SALDO FWD OFFSHORE (USD million)",
         date_filter="2024-01-01",
     )
 

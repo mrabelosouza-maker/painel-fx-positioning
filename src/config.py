@@ -219,4 +219,8 @@ SECTOR_CHART_LINES = SECTOR_LEAVES + [SECTOR_OFFSHORE]
 # O total do mercado, somado das linhas acima e desenhado destacado.
 SECTOR_NET_LINE = "TOTAL (todos os setores)"
 
-SECTOR_WINDOWS = [1, 7, 28]
+# Janelas da aba em PREGOES, nao dias corridos: 1, 5 e 21 sessoes. Dias corridos
+# davam janela erratica (7 corridos cobrem 5 pregoes na sexta e 4 na segunda de
+# feriado), e o resto do painel ja conta pregao (OFFSHORE_WEEKLY_SESSIONS,
+# AFP_DELTA_SESSIONS).
+SECTOR_WINDOWS = [1, 5, 21]
