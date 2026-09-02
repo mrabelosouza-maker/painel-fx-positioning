@@ -30,13 +30,14 @@ def _fig_estrutura(tab: pd.DataFrame, tipo: str, titulo: str) -> str:
 def _fig_beta(bm: pd.DataFrame) -> str:
     d = bm.dropna(subset=["beta"])
     fig = go.Figure(go.Scatter(
-        x=d["Data"], y=-d["beta"] / 1000.0, mode="lines",
+        x=d["Data"], y=d["beta"], mode="lines",
         line=dict(color=JGP_VERDE, width=1.5),
     ))
+    fig.add_hline(y=0, line=dict(color=JGP_PRETO, width=1, dash="dot"))
     fig.update_layout(
-        title="Exposicao hedgeada implicita (h*A), janela expansivel",
+        title="Beta em janela expansivel",
         template="jgp", height=360, margin=dict(l=60, r=20, t=64, b=60),
-        yaxis_title="USD bilhoes",
+        yaxis_title="USD milhoes por unidade de retorno",
     )
     return fig.to_html(full_html=False, include_plotlyjs=False)
 
@@ -83,6 +84,7 @@ def gerar(
     aval: dict,
     criterios: list[tuple[str, bool, str]],
     veredito: bool,
+    n_painel: int,
 ) -> Path:
     """Escreve o HTML. Nao decide nada: so mostra o que as outras pecas mediram."""
     titulo_veredito = (
@@ -109,6 +111,11 @@ chileno, entao o retorno do mesmo dia (k=0) nao estaria disponivel a tempo.</p>
 
 <h2>Estabilidade do beta</h2>
 <div class="card">{_fig_beta(bm)}</div>
+<p class="sub">O beta so se traduz em exposicao hedgeada implicita
+(h*A = -beta/1000, em USD bilhoes) quando e negativo, conforme a convencao de
+sinal descrita acima. Com beta positivo, como na especificacao vencedora, essa
+traducao nao tem sentido economico: e por isso que o grafico acima mostra o
+beta diretamente, e nao um h*A.</p>
 
 <h2>Previsto vs realizado</h2>
 <p class="sub">Previsao em cada dia usa coeficientes ajustados apenas com dado
@@ -130,11 +137,13 @@ anterior aquele dia.</p>
 </tbody></table></div>
 
 <h2>Limitacoes</h2>
-<p class="sub">1.054 observacoes, e nao ha mais: e o limite do dado do BCCh.
-Cada metade do split cobre ~2 anos, entao o teste de estabilidade e tambem um
-teste de regime e os dois nao dao para separar. A vencedora foi escolhida entre
-~32 especificacoes; o criterio de plateau mitiga a busca, nao a elimina. Nada
-aqui tem custo de transacao: e medida de relacao estatistica, nao de P&amp;L.</p>
+<p class="sub">{n_painel:,} observacoes no painel, e nao ha mais: e o limite do
+dado do BCCh ({aval['nobs']:,} entraram na regressao vencedora fora de
+amostra, apos o treino minimo). Cada metade do split cobre ~2 anos, entao o
+teste de estabilidade e tambem um teste de regime e os dois nao dao para
+separar. A vencedora foi escolhida entre ~32 especificacoes; o criterio de
+plateau mitiga a busca, nao a elimina. Nada aqui tem custo de transacao: e
+medida de relacao estatistica, nao de P&amp;L.</p>
 """
 
     html = f"""<!doctype html>
