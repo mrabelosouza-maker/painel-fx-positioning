@@ -114,6 +114,10 @@ OFFSHORE_ADJ_CUTOVER = "2025-12-15"  # a partir desta data, soma spot acumulado
 # 15-dez-2025 = 1o dia util apos o 2o turno, mesma ancora do Santander.
 # Trocar a ancora e um deslocamento aditivo puro: muda o nivel, nao a forma nem o z-score.
 
+# Janela em que o grafico de nivel vs USDCLP abre. Nao corta a amostra: o dado
+# inteiro vai para o grafico e o zoom (ou duplo-clique) devolve a serie toda.
+OFFSHORE_ADJ_DEFAULT_START = "2025-01-01"
+
 # ──────────────────────────────────────────────────────────────────────
 # Colombia
 # ──────────────────────────────────────────────────────────────────────

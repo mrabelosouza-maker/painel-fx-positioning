@@ -316,12 +316,14 @@ def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
-    """Agrega as duas pernas do offshore por semana (sexta a sexta).
+    """Agrega as duas pernas do offshore por semana (sexta a sexta), em compra-de-USD.
 
     Mesma convencao e mesmos nomes de coluna que build_afp_weekly_legs, para os
     dois setores usarem o mesmo grafico e poderem ser comparados lado a lado:
-    acima de zero = compra de CLP. As series cruas do BCCh vem na otica do banco
-    residente, que ja e essa convencao, entao entram sem inverter sinal.
+    acima de zero = compra de USD. As series cruas do BCCh vem na otica do banco
+    residente (positivo = cliente comprando CLP), entao as duas entram com o
+    sinal invertido — sem isso o comparativo com o net dos fundos de pensao, que
+    ja sai em compra-de-USD, somaria as duas series em sinais opostos.
 
       ndf_wk  : variacao semanal do saldo de NDF
       bcch_wk : soma semanal do fluxo spot liquido
@@ -329,8 +331,8 @@ def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
     """
     d = adj_df.set_index("Data").sort_index()
     wk = pd.DataFrame({
-        "ndf_wk": d["No residentes"].resample("W-FRI").last().diff(),
-        "bcch_wk": d["spot_neto"].resample("W-FRI").sum(),
+        "ndf_wk": (-d["No residentes"]).resample("W-FRI").last().diff(),
+        "bcch_wk": (-d["spot_neto"]).resample("W-FRI").sum(),
     }).dropna()
     wk["net_wk"] = wk["ndf_wk"] + wk["bcch_wk"]
     return wk.rename_axis("Semana").reset_index()
@@ -339,7 +341,7 @@ def build_weekly_legs(adj_df: pd.DataFrame) -> pd.DataFrame:
 def build_net_comparison(afp_wk: pd.DataFrame, off_wk: pd.DataFrame) -> pd.DataFrame:
     """Junta o net semanal dos fundos de pensao, o do offshore e a soma dos dois.
 
-    As duas ja saem em compra-de-CLP das suas funcoes semanais, entao vao para o
+    As duas ja saem em compra-de-USD das suas funcoes semanais, entao vao para o
     mesmo eixo sem conversao. Uniao das semanas: as duas series comecam em datas
     diferentes e cada linha fica com o buraco onde nao tem dado.
     """

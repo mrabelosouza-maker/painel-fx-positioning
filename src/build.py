@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import SECTOR_WINDOWS
+from config import SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
@@ -36,8 +36,7 @@ from chart_builder import (
     make_sector_weekly_stacked,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
-    JGP_VERDE,
-    JGP_VERMELHO,
+    JGP_AZUL,
     make_afp_5d_bars,
     make_afp_daily_bars,
     make_afp_level_line,
@@ -224,17 +223,23 @@ def build_swap_section(swap_data):
 def build_offshore_adj_section(dados, afp_wk=None):
     """Gera charts e tables para a aba Offshore Ajustado.
 
+    Toda a aba na convencao compra-de-USD: positivo = compra de USD (venda de
+    CLP), negativo = venda de USD. Vale para o nivel, para os deltas e para as
+    duas pernas semanais — as series cruas do BCCh vem na otica do banco
+    residente e entram invertidas.
+
     `afp_wk` e o semanal dos fundos de pensao, calculado uma vez no main e
     reaproveitado aqui para o comparativo de net entre os dois setores.
     """
     ctx = {}
     adj_df = build_offshore_adjusted(dados)
 
-    # As duas pernas por semana e a correlacao entre elas (antes de inverter o sinal
-    # de Offshore_Adj: essas funcoes leem as colunas cruas "No residentes"/"spot_neto")
+    # As duas pernas por semana e a correlacao entre elas. build_weekly_legs ja
+    # devolve em compra-de-USD; build_offshore_corr le as colunas cruas e a
+    # correlacao e invariante a inversao conjunta das duas pernas.
     wk = build_weekly_legs(adj_df)
     ctx["offadj_weekly_bars"] = make_weekly_legs_bars(
-        wk, "SEMANAL: as duas pernas do fluxo do offshore",
+        wk, "SEMANAL: as duas pernas do fluxo do offshore", usd=True,
     )
     ctx["offadj_net_vs_afp"] = make_net_comparison_chart(
         build_net_comparison(afp_wk if afp_wk is not None else pd.DataFrame(), wk),
@@ -245,44 +250,54 @@ def build_offshore_adj_section(dados, afp_wk=None):
         "Correlação móvel entre as pernas: NDF (saldo) vs spot acumulado",
     )
 
-    # Inverter sinal: positivo = long USD, negativo = short USD
+    # Inverter sinal: positivo = compra de USD, negativo = venda de USD
     adj_df["Offshore_Adj"] = -adj_df["Offshore_Adj"]
 
+    # Deltas em PREGOES (5 e 21), como as abas de Fundos de Pensao, Offshore e
+    # Fluxo AFP — nao em dias corridos, que dariam janela erratica (5 dias
+    # corridos cobrem 3 pregoes na segunda e 5 so na sexta).
     fx_labels = {
         "delta_1d": "Delta 1D",
-        "delta_7d": "Delta 7D",
+        "delta_5d": "Delta 5D",
+        "delta_21d": "Delta 21D",
         "pct_usdclp": "% USDCLP",
     }
 
-    # Dual-axis: Offshore Ajustado vs USDCLP (eixo direito NAO invertido)
+    # Dual-axis: Offshore Ajustado vs USDCLP (eixo direito NAO invertido, porque
+    # na convencao compra-de-USD as duas series andam no mesmo sentido). Abre em
+    # jan/2025 com os dois eixos padronizados na janela visivel, o que faz as
+    # linhas andarem quase um pra um; o JS refaz essa conta quando o usuario
+    # expande a janela, ate a amostra toda.
     ctx["offadj_chart"] = make_dual_axis_chart(
         adj_df, "Data", "Offshore_Adj", "USDCLP",
         title="Offshore Ajustado (NDF + Spot Acum.) vs USDCLP",
         y1_name="Offshore Adj (USD mm)", y2_name="USDCLP",
+        y2_color=JGP_AZUL,
         invert_y2=False,
-        annotations=[
-            dict(text="Long USD", y_pos="top", color=JGP_VERDE),
-            dict(text="Short USD", y_pos="bottom", color=JGP_VERMELHO),
-        ],
+        default_start=OFFSHORE_ADJ_DEFAULT_START,
+        usd_labels=True,
+        fit_1a1=True,
     )
 
     # Tabela: ultimas 5 linhas com deltas + % USDCLP
     col = "Offshore_Adj"
-    df_deltas = compute_deltas(adj_df, col, [1, 7, 28])
+    df_deltas = compute_deltas(adj_df, col, [1, 5, 21], sessions=True)
     df_deltas["pct_usdclp"] = 100 * (np.log(df_deltas["USDCLP"]) - np.log(df_deltas["USDCLP"].shift(1)))
     ctx["offadj_table"] = make_summary_table(
-        df_deltas, [col, "delta_1d", "delta_7d", "pct_usdclp"],
+        df_deltas, [col, "delta_1d", "delta_5d", "pct_usdclp"],
         col_labels={col: "Nivel", **fx_labels}, decimals=1,
     )
 
     # Bar charts de delta
-    ctx["offadj_delta7"] = make_bar_chart(
-        df_deltas, "Data", "delta_7d",
-        "DELTA 7 DIAS: Offshore Ajustado (USD million)",
+    ctx["offadj_delta5"] = make_bar_chart(
+        df_deltas, "Data", "delta_5d",
+        "DELTA 5 PREGÕES: Offshore Ajustado (USD million)",
+        usd_labels=True,
     )
-    ctx["offadj_delta28"] = make_bar_chart(
-        df_deltas, "Data", "delta_28d",
-        "DELTA 28 DIAS: Offshore Ajustado (USD million)",
+    ctx["offadj_delta21"] = make_bar_chart(
+        df_deltas, "Data", "delta_21d",
+        "DELTA 21 PREGÕES: Offshore Ajustado (USD million)",
+        usd_labels=True,
     )
 
     return ctx

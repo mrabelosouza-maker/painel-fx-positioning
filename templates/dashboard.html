@@ -440,8 +440,10 @@
     <!-- ══════════════════ OFFSHORE AJUSTADO ══════════════════ -->
     <div id="tab-offadj" class="tab">
       <h2>Posição ajustada e resumo</h2>
-      <p class="sub">Convenção de <b>compra de CLP</b>: acima de zero = comprando CLP (vendendo USD).
-        Invertida em relação às abas de Fundos de Pensão, Fluxo AFP e Todos os Setores.</p>
+      <p class="sub">Convenção de <b>compra de USD</b> em toda a aba: acima de zero = comprando USD
+        (vendendo CLP), abaixo de zero = vendendo USD. Mesma das abas de Fundos de Pensão, Offshore,
+        Fluxo AFP e Todos os Setores. O gráfico abre em jan/2025 com os eixos padronizados na janela
+        visível &mdash; zoom-out ou duplo-clique devolve a amostra inteira, com os eixos reajustados.</p>
       <div class="grid-wide">
         <div class="card">{{ offadj_chart | safe }}</div>
         <div class="card">{{ offadj_table | safe }}</div>
@@ -449,8 +451,8 @@
 
       <h2>Variação por janela</h2>
       <div class="grid2">
-        <div class="card">{{ offadj_delta7 | safe }}</div>
-        <div class="card">{{ offadj_delta28 | safe }}</div>
+        <div class="card">{{ offadj_delta5 | safe }}</div>
+        <div class="card">{{ offadj_delta21 | safe }}</div>
       </div>
 
       <h2>Fluxo semanal por perna</h2>
