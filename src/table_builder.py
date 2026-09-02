@@ -71,7 +71,9 @@ def make_swap_delta_table(
     delta_data: {participant_name: {period_label: value, ...}}
     """
     participants = ["Offshore", "Local Ex Banks", "Local Banks"]
-    periods = ["1D Change", "7D Change", "30D Change", "45D Change", "90D Change"]
+    from data_processor import SWAP_DELTA_SESSIONS, swap_delta_label
+
+    periods = [swap_delta_label(n) for n in SWAP_DELTA_SESSIONS]
 
     header = "<tr><th></th>" + "".join(f"<th>{p}</th>" for p in participants) + "</tr>"
 
@@ -146,9 +148,9 @@ def make_afp_legs_table(
 
 
 def make_sector_flow_table(
-    tab: pd.DataFrame, dias: int, inicio, fim,
+    tab: pd.DataFrame, sessoes: int, inicio, fim,
 ) -> str:
-    """Tabela de um horizonte: setor x NDF, spot, net e nivel do saldo, em compra-de-USD.
+    """Tabela de um horizonte (em pregoes): setor x NDF, spot, net e nivel do saldo, em compra-de-USD.
 
     As folhas vao indentadas e os agregados em negrito com risco em cima, para a
     conta ficar visivel na propria tabela: as seis folhas somam Residentes no
@@ -163,7 +165,7 @@ def make_sector_flow_table(
         f"{pd.Timestamp(inicio).strftime('%d/%m')} a "
         f"{pd.Timestamp(fim).strftime('%d/%m/%Y')}"
     )
-    rotulo = {1: "1 DIA", 7: "7 DIAS", 28: "28 DIAS"}.get(dias, f"{dias} DIAS")
+    rotulo = "1 PREGÃO" if sessoes == 1 else f"{sessoes} PREGÕES"
 
     linhas = []
     for setor, row in tab.iterrows():

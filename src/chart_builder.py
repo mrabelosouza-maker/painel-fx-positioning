@@ -514,7 +514,7 @@ def make_swap_delta_bars(
     deltas: dict,
     title: str,
 ) -> str:
-    """Horizontal bar chart: 1D/7D/30D/45D/90D changes."""
+    """Horizontal bar chart: variacao em 1/5/21/32/63 pregoes."""
     labels = list(deltas.keys())
     values = list(deltas.values())
 
