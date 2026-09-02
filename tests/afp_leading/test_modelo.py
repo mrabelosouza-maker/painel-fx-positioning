@@ -77,3 +77,48 @@ def test_k_zero_marcado_nao_utilizavel():
     k0 = tab[(tab["tipo"] == "pontual") & (tab["n"] == 0)].iloc[0]
     assert not k0["utilizavel"]
     assert tab[tab["tipo"] == "acumulada"]["utilizavel"].all()
+
+
+from estudos.afp_leading.modelo import beta_movel, portao_sanidade, FAIXA_H_A_BI
+
+
+def test_beta_movel_converge_para_o_verdadeiro():
+    painel = painel_sintetico(n=900, k_verdadeiro=3, beta_verdadeiro=-30000.0)
+    bm = beta_movel(painel, Spec("net_1d", "r_MXWO", "pontual", 3))
+
+    assert list(bm.columns) == ["Data", "beta"]
+    assert bm["beta"].notna().sum() > 500
+    assert bm["beta"].dropna().iloc[-1] == pytest.approx(-30000.0, rel=0.15)
+
+
+def test_beta_movel_nao_usa_o_futuro():
+    """Trocar o dado depois de uma data nao pode mudar o beta naquela data."""
+    painel = painel_sintetico(n=900, k_verdadeiro=3, beta_verdadeiro=-30000.0)
+    spec = Spec("net_1d", "r_MXWO", "pontual", 3)
+    bm1 = beta_movel(painel, spec)
+
+    corrompido = painel.copy()
+    corrompido.loc[600:, "net_1d"] = corrompido.loc[600:, "net_1d"] * -5.0
+    bm2 = beta_movel(corrompido, spec)
+
+    corte = 500
+    a = bm1.iloc[:corte]["beta"].to_numpy()
+    b = bm2.iloc[:corte]["beta"].to_numpy()
+    np.testing.assert_allclose(a, b, equal_nan=True)
+
+
+def test_portao_aceita_magnitude_plausivel():
+    ok, msg = portao_sanidade(-30000.0)
+    assert ok, msg
+
+
+def test_portao_rejeita_beta_positivo():
+    ok, msg = portao_sanidade(30000.0)
+    assert not ok
+    assert "positivo" in msg.lower()
+
+
+def test_portao_rejeita_magnitude_absurda():
+    ok, msg = portao_sanidade(-500000.0)  # h*A = USD 500 bi
+    assert not ok
+    assert "500" in msg

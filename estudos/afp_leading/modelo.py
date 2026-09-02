@@ -89,3 +89,68 @@ def estrutura_defasagem(
         })
 
     return pd.DataFrame(linhas)
+
+
+# Faixa de exposicao hedgeada implicita (h*A) aceitavel, em USD bilhoes.
+# Checagem de ordem de grandeza, nao de precisao: a carteira externa do AFP e da
+# ordem de dezenas de bilhoes e a razao de hedge historicamente varia numa faixa
+# larga. Se h*A cair perto de qualquer borda, confrontar com o ativo externo
+# publicado pela Superintendencia de Pensiones antes de seguir.
+FAIXA_H_A_BI = (5.0, 90.0)
+
+
+def beta_movel(
+    painel: pd.DataFrame,
+    spec: Spec,
+    janela: int | None = None,
+    min_treino: int = 252,
+) -> pd.DataFrame:
+    """Beta estimado so com dado anterior a cada data.
+
+    janela=None  -> expansivel (toda a historia ate t-1)
+    janela=252   -> movel de 252 observacoes terminando em t-1
+
+    O beta na linha i NUNCA usa a observacao i nem nenhuma posterior: e esse
+    beta que a fase 2 usaria para prever, e um beta contaminado pelo futuro
+    inventaria performance.
+    """
+    x = serie_preditora(painel, spec).to_numpy()
+    y = painel[spec.alvo].to_numpy()
+    valido = ~(np.isnan(x) | np.isnan(y))
+
+    betas = np.full(len(painel), np.nan)
+    for i in range(len(painel)):
+        ini = 0 if janela is None else max(0, i - janela)
+        sel = valido.copy()
+        sel[:ini] = False
+        sel[i:] = False  # exclui a propria observacao e todo o futuro
+        if sel.sum() < min_treino:
+            continue
+        xi, yi = x[sel], y[sel]
+        m = sm.OLS(yi, sm.add_constant(xi)).fit()
+        betas[i] = float(m.params[1])
+
+    return pd.DataFrame({"Data": painel["Data"].to_numpy(), "beta": betas})
+
+
+def portao_sanidade(beta: float, faixa=FAIXA_H_A_BI) -> tuple[bool, str]:
+    """Checa se o beta e compativel com o mecanismo antes de gastar o resto.
+
+    Duas condicoes: sinal negativo (bolsa sobe -> AFP vende USD a termo) e
+    exposicao hedgeada implicita de ordem de grandeza plausivel.
+    """
+    if not np.isfinite(beta):
+        return False, "beta nao finito"
+    if beta >= 0:
+        return False, (
+            f"beta positivo ({beta:,.0f}): bolsa subindo com o AFP comprando USD "
+            "contraria o mecanismo de hedge. A hipotese esta errada, nao o ajuste."
+        )
+    h_a = -beta / 1000.0
+    lo, hi = faixa
+    if not (lo <= h_a <= hi):
+        return False, (
+            f"exposicao hedgeada implicita de USD {h_a:,.1f} bi fora da faixa "
+            f"[{lo:,.0f}, {hi:,.0f}] bi"
+        )
+    return True, f"beta {beta:,.0f} -> h*A implicito de USD {h_a:,.1f} bi"
