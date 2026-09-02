@@ -1,0 +1,87 @@
+"""Alinhamento de calendario entre o fluxo AFP e os indices de bolsa."""
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from estudos.afp_leading.dados import alinhar
+
+
+def _afp(datas, net=None):
+    n = len(datas)
+    return pd.DataFrame({
+        "Data": pd.to_datetime(datas),
+        "ndf_1d": np.arange(n, dtype=float),
+        "spot_bcch": np.zeros(n),
+        "net_1d": np.arange(n, dtype=float) if net is None else net,
+    })
+
+
+def test_retorno_acumula_sobre_dia_sem_indice():
+    """Feriado no indice: retorno zero no dia, movimento inteiro no seguinte.
+
+    O painel tem 3 dias uteis chilenos; o indice nao negociou no dia 2. O
+    retorno do dia 2 tem que ser zero e o do dia 3 tem que carregar o caminho
+    inteiro de 100 para 110, nao so o ultimo trecho.
+    """
+    afp = _afp(["2024-01-02", "2024-01-03", "2024-01-04"])
+    precos = pd.DataFrame({
+        "Data": pd.to_datetime(["2024-01-02", "2024-01-04"]),
+        "MXWO": [100.0, 110.0],
+    })
+
+    out = alinhar(afp, precos)
+
+    assert list(out.columns) == ["Data", "ndf_1d", "spot_bcch", "net_1d", "r_MXWO"]
+    # primeira linha nao tem retorno definido e sai do painel
+    assert len(out) == 2
+    assert out["Data"].tolist() == pd.to_datetime(["2024-01-03", "2024-01-04"]).tolist()
+    assert out["r_MXWO"].iloc[0] == pytest.approx(0.0)
+    assert out["r_MXWO"].iloc[1] == pytest.approx(np.log(110 / 100))
+
+
+def test_dia_do_afp_sem_preco_anterior_sai_do_painel():
+    """Sem fechamento anterior ao inicio, nao ha retorno: a linha nao entra."""
+    afp = _afp(["2024-01-02", "2024-01-03"])
+    precos = pd.DataFrame({
+        "Data": pd.to_datetime(["2024-01-03"]),
+        "MXWO": [100.0],
+    })
+
+    out = alinhar(afp, precos)
+
+    assert out.empty
+
+
+def test_dia_do_indice_sem_afp_nao_vira_linha():
+    """O painel segue o calendario do AFP; dia extra do indice e ignorado."""
+    afp = _afp(["2024-01-02", "2024-01-04"])
+    precos = pd.DataFrame({
+        "Data": pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
+        "MXWO": [100.0, 105.0, 110.0],
+    })
+
+    out = alinhar(afp, precos)
+
+    assert out["Data"].tolist() == pd.to_datetime(["2024-01-04"]).tolist()
+    # acumula 100 -> 110, passando por 105 sem criar linha
+    assert out["r_MXWO"].iloc[0] == pytest.approx(np.log(110 / 100))
+
+
+def test_fluxo_nao_e_preenchido():
+    """NaN no fluxo derruba a linha; nunca vira zero nem ffill."""
+    afp = _afp(["2024-01-02", "2024-01-03", "2024-01-04"])
+    afp.loc[1, "net_1d"] = np.nan
+    precos = pd.DataFrame({
+        "Data": pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"]),
+        "MXWO": [100.0, 105.0, 110.0],
+    })
+
+    out = alinhar(afp, precos)
+
+    assert out["Data"].tolist() == pd.to_datetime(["2024-01-04"]).tolist()
