@@ -188,6 +188,26 @@ def test_plateau_rejeita_vizinho_de_sinal_trocado():
     assert not ok
 
 
+def test_plateau_vencedor_na_borda_inferior_da_grade():
+    """Vencedor em k=1 numa grade que so tem especificacoes UTILIZAVEIS.
+
+    Reproduz o bloqueante da revisao: se a grade completa (incluindo k=0, que
+    nunca e utilizavel e portanto nunca tem avaliacao) fosse passada aqui, um
+    vencedor em k=1 procuraria o vizinho k=0, nao acharia avaliacao, e
+    reprovaria com uma mensagem de "sem avaliacao" que parece falha de dado
+    mas e so artefato de construcao da tabela. Com a grade contendo so
+    especificacoes utilizaveis (k>=1), k=1 so tem UM vizinho na grade: k=2.
+    O plateau tem que ser avaliado contra k=2, e k=0 nunca deve aparecer na
+    mensagem.
+    """
+    tab = _tabela([(1, -28000, 0.15), (2, -30000, 0.20), (3, -26000, 0.14)])
+    aval = {(r.tipo, r.n): {"r2_oos": r.r2_oos, "beta": r.beta} for r in tab.itertuples()}
+    ok, msg = tem_plateau(tab, "pontual", 1, aval)
+    assert ok, msg
+    assert "2" in msg
+    assert "vizinho (pontual, 0)" not in msg
+
+
 def test_plateau_rejeita_vencedor_com_r2_negativo():
     """r2_alvo <= 0 nao tem o que sustentar como plateau, mesmo com vizinhos vivos.
 
@@ -200,4 +220,4 @@ def test_plateau_rejeita_vencedor_com_r2_negativo():
     aval = {(r.tipo, r.n): {"r2_oos": r.r2_oos, "beta": r.beta} for r in tab.itertuples()}
     ok, msg = tem_plateau(tab, "pontual", 3, aval)
     assert not ok
-    assert "preditivo" in msg.lower()
+    assert "ausencia de sinal" in msg.lower()

@@ -7,11 +7,14 @@ tem beta = -h*A, onde h e a razao de hedge e A a carteira externa em USD mm.
 Bolsa sobe -> carteira externa vale mais -> o AFP vende USD a termo -> fluxo
 negativo na convencao de compra-de-USD, logo beta negativo.
 """
+import logging
 from collections import namedtuple
 
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+
+logger = logging.getLogger(__name__)
 
 Spec = namedtuple("Spec", ["alvo", "preditor", "tipo", "n"])
 
@@ -44,6 +47,10 @@ def _ajustar(painel: pd.DataFrame, spec: Spec):
     y = painel[spec.alvo]
     d = pd.DataFrame({"y": y, "x": x}).dropna()
     if len(d) < 30:
+        logger.warning(
+            "Especificacao %s descartada: so %d observacoes apos dropna (minimo 30)",
+            spec, len(d),
+        )
         return None, len(d)
     maxlags = max(1, spec.n if spec.tipo == "acumulada" else 1)
     m = sm.OLS(d["y"], sm.add_constant(d["x"])).fit(

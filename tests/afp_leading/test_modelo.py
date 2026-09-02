@@ -193,4 +193,4 @@ def test_portao_rejeita_beta_positivo():
 def test_portao_rejeita_magnitude_absurda():
     ok, msg = portao_sanidade(-500000.0)  # h*A = USD 500 bi
     assert not ok
-    assert "500" in msg
+    assert "faixa" in msg

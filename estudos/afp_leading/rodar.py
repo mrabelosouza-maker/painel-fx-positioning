@@ -1,11 +1,13 @@
 """Entrypoint do estudo. Encadeia dados -> modelo -> avaliacao -> relatorio.
 
     python -m estudos.afp_leading.rodar
+    python -m estudos.afp_leading.rodar --alvo ndf_1d --preditor r_MXEF
 
 Escolha da especificacao vencedora: maior R2 fora de amostra entre as
 UTILIZAVEIS. Nao a de maior R2 dentro de amostra — dentro de amostra a
 especificacao mais flexivel sempre ganha, e o que interessa e prever.
 """
+import argparse
 import logging
 from pathlib import Path
 
@@ -19,12 +21,25 @@ from .relatorio import gerar
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-ALVO = "net_1d"
-PREDITOR = "r_MXWO"
+ALVO_PADRAO = "net_1d"
+PREDITOR_PADRAO = "r_MXWO"
 SAIDA = Path(__file__).resolve().parent / "saida" / "afp_fluxo_previsto.html"
 
 
-def main() -> int:
+def _parse_args(argv=None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--alvo", default=ALVO_PADRAO, choices=["net_1d", "ndf_1d"],
+                   help=f"coluna de fluxo alvo (padrao: {ALVO_PADRAO})")
+    p.add_argument("--preditor", default=PREDITOR_PADRAO,
+                   choices=["r_MXWO", "r_MXWD", "r_SPX", "r_MXEF"],
+                   help=f"coluna de retorno preditor (padrao: {PREDITOR_PADRAO})")
+    return p.parse_args(argv)
+
+
+def main(argv=None) -> int:
+    args = _parse_args(argv)
+    ALVO, PREDITOR = args.alvo, args.preditor
+
     painel = montar_painel()
     logger.info("Painel com %d observacoes", len(painel))
 
@@ -71,7 +86,11 @@ def main() -> int:
     ok_portao, msg_portao = portao_sanidade(float(beta_vencedora))
     logger.info("Portao de sanidade (vencedora): %s | %s", "OK" if ok_portao else "FALHOU", msg_portao)
 
-    ok_plateau, msg_plateau = tem_plateau(tab, tipo_v, n_v, aval_por_spec)
+    # Passa so as UTILIZAVEIS (nao a tabela completa) para o teste de plateau:
+    # a tabela completa inclui k=0, que nunca tem avaliacao (nao e utilizavel),
+    # entao um vencedor em k=1 procuraria o vizinho k=0 e reprovaria por
+    # "sem avaliacao" -- artefato de construcao, nao falha real de plateau.
+    ok_plateau, msg_plateau = tem_plateau(utilizaveis, tipo_v, n_v, aval_por_spec)
     m = aval["metades"]
     b1, b2 = m["primeira"]["beta"], m["segunda"]["beta"]
     mesmo_sinal = (b1 < 0) == (b2 < 0)
@@ -90,8 +109,12 @@ def main() -> int:
     veredito = all(ok for _, ok, _ in criterios)
 
     bm = beta_movel(painel, spec)
+    bm_janela = beta_movel(painel, spec, janela=252)
     prev = previsao_oos(painel, spec)
-    caminho = gerar(SAIDA, spec, tab, bm, prev, aval, criterios, veredito, len(painel))
+    caminho = gerar(
+        SAIDA, spec, tab, bm, bm_janela, prev, aval, criterios, veredito, len(painel),
+        beta_vencedora=float(beta_vencedora),
+    )
 
     logger.info("VEREDITO: %s", "POSITIVO" if veredito else "NEGATIVO")
     logger.info("Relatorio em %s", caminho)

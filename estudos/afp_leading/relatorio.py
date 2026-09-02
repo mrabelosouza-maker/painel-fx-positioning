@@ -27,17 +27,24 @@ def _fig_estrutura(tab: pd.DataFrame, tipo: str, titulo: str) -> str:
     return fig.to_html(full_html=False, include_plotlyjs=False)
 
 
-def _fig_beta(bm: pd.DataFrame) -> str:
+def _fig_beta(bm: pd.DataFrame, bm_janela: pd.DataFrame) -> str:
     d = bm.dropna(subset=["beta"])
-    fig = go.Figure(go.Scatter(
-        x=d["Data"], y=d["beta"], mode="lines",
+    d_j = bm_janela.dropna(subset=["beta"])
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=d["Data"], y=d["beta"], mode="lines", name="expansivel",
         line=dict(color=JGP_VERDE, width=1.5),
+    ))
+    fig.add_trace(go.Scatter(
+        x=d_j["Data"], y=d_j["beta"], mode="lines", name="movel 252 dias",
+        line=dict(color=JGP_AZUL, width=1.2),
     ))
     fig.add_hline(y=0, line=dict(color=JGP_PRETO, width=1, dash="dot"))
     fig.update_layout(
-        title="Beta em janela expansivel",
-        template="jgp", height=360, margin=dict(l=60, r=20, t=64, b=60),
+        title="Beta em janela expansivel e movel",
+        template="jgp", height=360, margin=dict(l=60, r=20, t=64, b=96),
         yaxis_title="USD milhoes por unidade de retorno",
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="left", x=0),
     )
     return fig.to_html(full_html=False, include_plotlyjs=False)
 
@@ -80,11 +87,13 @@ def gerar(
     spec,
     tab: pd.DataFrame,
     bm: pd.DataFrame,
+    bm_janela: pd.DataFrame,
     prev: pd.DataFrame,
     aval: dict,
     criterios: list[tuple[str, bool, str]],
     veredito: bool,
     n_painel: int,
+    beta_vencedora: float,
 ) -> Path:
     """Escreve o HTML. Nao decide nada: so mostra o que as outras pecas mediram."""
     titulo_veredito = (
@@ -93,6 +102,22 @@ def gerar(
         "RESULTADO NEGATIVO: a hipotese nao passou"
     )
     m = aval["metades"]
+    if beta_vencedora < 0:
+        texto_beta = (
+            "O beta so se traduz em exposicao hedgeada implicita "
+            "(h*A = -beta/1000, em USD bilhoes) quando e negativo, conforme a convencao de "
+            "sinal descrita acima. Como o beta da especificacao vencedora e negativo, o "
+            "grafico acima poderia ser lido como h*A; ele mostra o beta diretamente para "
+            "manter a mesma escala das outras especificacoes da tabela."
+        )
+    else:
+        texto_beta = (
+            "O beta so se traduz em exposicao hedgeada implicita "
+            "(h*A = -beta/1000, em USD bilhoes) quando e negativo, conforme a convencao de "
+            "sinal descrita acima. Com beta positivo, como na especificacao vencedora, essa "
+            "traducao nao tem sentido economico: e por isso que o grafico acima mostra o "
+            "beta diretamente, e nao um h*A."
+        )
     corpo = f"""
 <h2>Veredito</h2>
 <p class="lead"><b>{titulo_veredito}</b></p>
@@ -110,12 +135,8 @@ chileno, entao o retorno do mesmo dia (k=0) nao estaria disponivel a tempo.</p>
 <div class="card">{_fig_estrutura(tab, 'acumulada', 'Janela acumulada: R2 por w')}</div>
 
 <h2>Estabilidade do beta</h2>
-<div class="card">{_fig_beta(bm)}</div>
-<p class="sub">O beta so se traduz em exposicao hedgeada implicita
-(h*A = -beta/1000, em USD bilhoes) quando e negativo, conforme a convencao de
-sinal descrita acima. Com beta positivo, como na especificacao vencedora, essa
-traducao nao tem sentido economico: e por isso que o grafico acima mostra o
-beta diretamente, e nao um h*A.</p>
+<div class="card">{_fig_beta(bm, bm_janela)}</div>
+<p class="sub">{texto_beta}</p>
 
 <h2>Previsto vs realizado</h2>
 <p class="sub">Previsao em cada dia usa coeficientes ajustados apenas com dado
