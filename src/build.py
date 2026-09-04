@@ -18,6 +18,7 @@ from config import SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
+    build_offshore_rolling_legs,
     build_all_sectors_flow, build_sector_window_table, build_sector_weekly,
     build_afp_spot_flow, build_afp_5d_legs, build_afp_weekly_legs,
     build_afp_rolling_legs, build_afp_levels,
@@ -243,6 +244,25 @@ def build_offshore_adj_section(dados):
     ctx["offadj_corr"] = make_offshore_corr_chart(
         build_offshore_corr(adj_df),
         "Correlação móvel entre as pernas: NDF (saldo) vs spot acumulado",
+    )
+
+    # As mesmas duas janelas rolantes da aba de Fluxo AFP, nas pernas do
+    # offshore: a curta suavizada e a de um mes. Barras consecutivas
+    # compartilham pregoes, entao leem-se como nivel de fluxo e nao como barras
+    # independentes — para isso serve o bloco de 5 pregoes acima.
+    # Calculadas aqui, antes da inversao do Offshore_Adj: elas leem
+    # `No residentes` e `spot_neto`, que ficam no sinal cru do BCCh.
+    ctx["offadj_roll5"] = make_weekly_legs_bars(
+        build_offshore_rolling_legs(adj_df, 5, media=5),
+        "ROLANTE: delta de 5 pregões, média móvel de 5 dias — empilhado",
+        weeks_default=120, stacked=True, usd=True, date_col="Data",
+        periodo="5 pregões",
+    )
+    ctx["offadj_roll21"] = make_weekly_legs_bars(
+        build_offshore_rolling_legs(adj_df, 21),
+        "ROLANTE: delta de 21 pregões — empilhado",
+        weeks_default=120, stacked=True, usd=True, date_col="Data",
+        periodo="21 pregões",
     )
 
     # Inverter sinal: positivo = compra de USD, negativo = venda de USD

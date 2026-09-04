@@ -385,6 +385,38 @@ def build_offshore_corr(
     return out.dropna(how="all").rename_axis("Data").reset_index()
 
 
+def build_offshore_rolling_legs(
+    adj_df: pd.DataFrame, sessoes: int, media: int = None,
+) -> pd.DataFrame:
+    """Janelas rolantes das duas pernas do offshore, em compra-de-USD.
+
+    A versao rolante do `build_weekly_legs`: em vez de blocos de pregao que nao
+    se sobrepoem, cada dia carrega a janela de `sessoes` pregoes que termina
+    nele. Mesma leitura da aba de Fluxo AFP, e por isso delega a conta da janela
+    para `build_afp_rolling_legs` — so monta antes o frame diario que ela espera.
+
+    As series cruas do BCCh vem na otica do banco residente (positivo = cliente
+    comprando CLP), entao as duas entram invertidas, como no resto da aba.
+
+      ndf_1d    : variacao diaria do saldo de NDF (a soma na janela e o delta
+                  do saldo de ponta a ponta)
+      spot_bcch : fluxo spot liquido de nao residentes no dia
+    """
+    if adj_df.empty:
+        return pd.DataFrame()
+
+    d = adj_df.dropna(subset=["No residentes"]).set_index("Data").sort_index()
+    diario = pd.DataFrame({
+        "Data": d.index,
+        "ndf_1d": (-d["No residentes"]).diff().values,
+        "spot_bcch": (-d["spot_neto"]).values,
+    })
+    # O primeiro pregao nao tem dia anterior, logo nao tem variacao de saldo. Sai
+    # antes da janela: se ficasse, a barra mais antiga somaria N dias de spot
+    # contra N-1 de NDF, e o empilhado compararia pernas de tamanho diferente.
+    return build_afp_rolling_legs(diario.iloc[1:], sessoes, media=media)
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Colombia
 # ──────────────────────────────────────────────────────────────────────
