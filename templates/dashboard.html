@@ -458,6 +458,17 @@
       <h2>Fluxo semanal por perna</h2>
       <div class="card">{{ offadj_weekly_bars | safe }}</div>
 
+      <h2>Janelas rolantes</h2>
+      <p class="sub">As duas pernas &mdash; <b>NDF</b> (variação do saldo forward de não residentes) e
+        <b>spot</b> (fluxo spot líquido observado pelo BCCh) &mdash; empilhadas, com o <b>net</b> das duas
+        na linha. Mesmos gráficos da aba de <i>Fluxo AFP</i>.
+        <br>
+        Aqui cada dia carrega a janela de N <b>pregões</b> que termina nele, então barras consecutivas
+        compartilham dias: leia como <b>nível de fluxo</b>, não como barras independentes &mdash; para isso
+        serve o bloco de 5 pregões acima, que não se sobrepõe.</p>
+      <div class="card">{{ offadj_roll5 | safe }}</div>
+      <div class="card">{{ offadj_roll21 | safe }}</div>
+
       <h2>Correlação com o spot</h2>
       <div class="card">{{ offadj_corr | safe }}</div>
     </div>
