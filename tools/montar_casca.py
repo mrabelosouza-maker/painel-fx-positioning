@@ -53,7 +53,15 @@ SHIM_CSS = """
   table.data-table thead th:first-child{text-align:left}
   table.data-table td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.data-table td.row-label{text-align:left;font-weight:600}
-  table.data-table tbody tr:hover td{background:var(--jgp-green-tint)}
+  /* A formatacao condicional das tabelas de setores sai como background inline,
+     que vence esta regra por especificidade. !important devolve o hover: a tinta
+     serve para varrer a coluna com o olho, e ao passar o mouse a linha inteira
+     se destaca limpa, para ler os numeros. */
+  table.data-table tbody tr:hover td{background:var(--jgp-green-tint) !important}
+  /* Amostras de cor na legenda da tinta, no subtitulo da tabela. */
+  .heat-key{padding:0 5px;border-radius:3px;font-weight:600;color:var(--ink-primary)}
+  .heat-key-compra{background:rgba(0,176,80,.34)}
+  .heat-key-venda{background:rgba(230,57,70,.34)}
   table.data-table tr.row-agg td{background:var(--sec);font-weight:700;
     border-top:2px solid var(--rule-strong)}
   .table-title{font-size:14px;font-weight:700;color:var(--chart-title);margin:0 0 2px;letter-spacing:-.01em}
@@ -104,6 +112,76 @@ new = (
 assert old in chrome
 chrome = chrome.replace(old, new)
 
+# O showTab da casca nao sabe da renderizacao preguicosa (LAZY_JS): as figuras da
+# aba que acabou de abrir precisam nascer depois do toggle do .on e antes do
+# onTab, para o reflow/retema dele as pegar ja desenhadas.
+old = """    document.querySelectorAll('.tab').forEach(p => p.classList.toggle('on', p.id === 'tab-' + id));
+    buildSidebar();"""
+new = """    document.querySelectorAll('.tab').forEach(p => p.classList.toggle('on', p.id === 'tab-' + id));
+    // Depois de trocar o .on e antes do onTab: as figuras que estavam
+    // enfileiradas nesta aba nascem agora, com largura de verdade, e o
+    // reflow/retema do onTab as pega ja desenhadas.
+    if (window.JGPLazy) window.JGPLazy.flush();
+    buildSidebar();"""
+assert old in chrome
+chrome = chrome.replace(old, new)
+
+# ── Renderizacao preguicosa: entra no head, antes de qualquer figura ──
+LAZY_JS = """<script>
+/* =====================================================================
+   Renderizacao preguicosa por aba.
+
+   As figuras chegam do Python (plotly to_html) como chamadas inline de
+   Plotly.newPlot, que rodam no parse do HTML. Sem isto, abrir o painel desenha
+   as 46 de uma vez — dezenas de milhares de nos SVG, a grande maioria em aba
+   escondida. Pior: aba escondida tem largura zero, entao a figura sai medida
+   errada e so se corrige no reflow seguinte.
+
+   O shim troca Plotly.newPlot por uma versao que enfileira a chamada quando a
+   div nao esta na aba visivel, e a solta quando a aba abre (showTab chama
+   flush). Como o script vem depois do plotly.min.js e antes de qualquer figura,
+   toda chamada passa por aqui.
+   ===================================================================== */
+window.JGPLazy = (function () {
+  var fila = {};   // id da div -> arguments do newPlot que ficou pendente
+  var real = null;
+
+  function visivel(id) {
+    var el = document.getElementById(id);
+    var pane = el && el.closest ? el.closest('.tab') : null;
+    // Fora de qualquer aba (ou sem closest): desenha na hora, e o seguro.
+    return !pane || pane.classList.contains('on');
+  }
+
+  if (typeof Plotly !== 'undefined') {
+    real = Plotly.newPlot;
+    Plotly.newPlot = function (div) {
+      var id = typeof div === 'string' ? div : (div && div.id);
+      if (id && !visivel(id)) {
+        fila[id] = arguments;
+        // to_html nao encadeia .then, mas devolver promessa mantem o contrato.
+        return Promise.resolve();
+      }
+      return real.apply(Plotly, arguments);
+    };
+  }
+
+  function flush() {
+    if (!real) return 0;
+    var soltar = Object.keys(fila).filter(visivel);
+    soltar.forEach(function (id) {
+      var args = fila[id];
+      delete fila[id];
+      try { real.apply(Plotly, args); } catch (e) {}
+    });
+    return soltar.length;
+  }
+
+  return { flush: flush, pendentes: function () { return Object.keys(fila).length; } };
+})();
+</script>"""
+
+
 # ── JS do painel: retema os graficos ja renderizados e cuida do reflow ──
 PANEL_JS = """
 /* =====================================================================
@@ -126,7 +204,15 @@ PANEL_JS = """
 (function () {
   var mq = window.matchMedia('(prefers-color-scheme: dark)');
   var tok = function (n) { return getComputedStyle(document.body).getPropertyValue(n).trim(); };
-  var plots = function () { return [].slice.call(document.querySelectorAll('.js-plotly-plot')); };
+  // So as figuras da aba VISIVEL. Era document.querySelectorAll, e cada troca de
+  // aba e cada resize rodava resize+relayout nas figuras todas da pagina,
+  // inclusive nas das abas escondidas — que tem largura zero, entao o relayout
+  // nem serve para nada la. Relayout de barra empilhada repinta um retangulo por
+  // ponto por serie, e era isso que travava a aba de setores.
+  var plots = function () {
+    var pane = document.querySelector('.tab.on');
+    return [].slice.call((pane || document).querySelectorAll('.js-plotly-plot'));
+  };
 
   function retema() {
     if (typeof Plotly === 'undefined') return;
@@ -157,7 +243,10 @@ PANEL_JS = """
     });
   }
 
-  // As figuras vem sem config.responsive, entao o reflow e explicito.
+  // O to_html ja emite config.responsive, entao o Plotly redimensiona sozinho.
+  // Este reflow existe para o caso que o dele nao cobre: a figura que nasceu com
+  // largura zero em aba escondida. Com a renderizacao preguicosa isso quase nao
+  // acontece mais, mas custa pouco e cobre a aba que ja estava aberta no load.
   function reflow() {
     if (typeof Plotly === 'undefined') return;
     plots().forEach(function (gd) { try { Plotly.Plots.resize(gd); } catch (e) {} });
@@ -190,6 +279,7 @@ html = f"""<!doctype html>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="plotly.min.js"></script>
+{LAZY_JS}
 <style>
 {css}
 </style>

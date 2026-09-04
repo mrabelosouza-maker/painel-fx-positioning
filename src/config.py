@@ -225,21 +225,22 @@ SECTOR_NET_LINE = "TOTAL (todos os setores)"
 # AFP_DELTA_SESSIONS).
 SECTOR_WINDOWS = [1, 5, 21]
 
-# Janelas dos dois empilhados ROLANTES da aba, em pregoes. Vao como area
-# divergente (make_sector_rolling_area) e nao como barra: barra prometeria
-# blocos independentes, que uma janela rolante nao tem, e custava um retangulo
-# por setor por pregao — mais de dez mil por grafico, que travava a aba. Como
-# area o historico inteiro cabe em dois caminhos por setor.
+# Janelas dos dois empilhados ROLANTES da aba, em pregoes.
 SECTOR_ROLLING_SESSIONS = [5, 21]
 
 # Observacoes na janela inicial do eixo x (~6 meses); o zoom-out abre o resto.
 SECTOR_ROLLING_DEFAULT_VIEW = 120
 
-# Historico dos rolantes, em pregoes (~3 anos), = 6x a janela inicial.
+# Historico dos rolantes, em pregoes (~1 ano), = 4x a janela inicial.
 #
-# Como area o custo de DOM ja nao depende do tamanho da serie, mas o de
-# transporte depende: o Plotly repete o array de datas em cada trace e manda os
-# numeros em base64 binario, que nao comprime no gzip. O historico longo da
-# composicao por setor continua inteiro nos tres empilhados semanais da aba, que
-# e onde ele se le — um rolante de 5 pregoes aberto em seis anos e borrao.
-SECTOR_ROLLING_HISTORY = 750
+# E orcamento de render, nao preferencia de layout. Plotly em SVG emite um
+# retangulo por ponto POR SETOR e desenha todos, inclusive os fora da janela
+# inicial do eixo x: sao sete setores, logo 7 retangulos por pregao. Com o
+# historico inteiro (~1.550 pregoes) cada grafico passava de dez mil retangulos,
+# 82% da aba, e a aba travava — troca de aba e resize disparam relayout, que
+# repinta tudo. 250 pregoes dao ~1.750 por grafico.
+#
+# A composicao por setor de prazo longo se le nos tres empilhados semanais da
+# aba, que custam 1/5 por pregao; um rolante de 5 pregoes aberto em seis anos e
+# borrao de todo jeito.
+SECTOR_ROLLING_HISTORY = 250

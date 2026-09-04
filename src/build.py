@@ -38,7 +38,6 @@ from chart_builder import (
     make_colombia_line_chart,
     make_weekly_legs_bars,
     make_sector_weekly_stacked,
-    make_sector_rolling_area,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
     JGP_AZUL,
@@ -177,16 +176,6 @@ def build_fx_section(dados):
     ctx["banks_delta21"] = make_bar_chart(
         df_banks, "Data", "delta_21d",
         "DELTA 21 PREGÕES: Posição dos Bancos (USD million)",
-    )
-
-    # ── TOTAL VS USDCLP ──
-    dados_total = dados.copy()
-    dados_total["Total_Positioning"] = dados_total["Fondos de pensiones"] + dados_total["No residentes"]
-    ctx["total_vs_usdclp"] = make_dual_axis_chart(
-        dados_total, "Data", "Total_Positioning", "USDCLP",
-        title="Positioning (Pensiones + Offshore) vs USDCLP",
-        y1_name="Positioning (USD mm)", y2_name="USDCLP",
-        invert_y2=True,
     )
 
     # ── FUNDOS + OFFSHORE ──
@@ -424,17 +413,20 @@ def build_sectors_section(dados):
             f"{titulo} — empilhado, linha = total",
         )
 
-    # Do net, tambem a versao rolante: mesma composicao, mas a janela anda
-    # pregao a pregao. Vai como area empilhada divergente, nao como barra: a
-    # serie e um nivel de fluxo (barras vizinhas compartilhariam pregoes) e a
-    # barra custava um retangulo por setor por pregao.
+    # Do net, tambem a versao rolante: mesma pilha de barras, mas a janela anda
+    # pregao a pregao em vez de fechar na sexta. weeks_default conta observacoes
+    # aqui, nao semanas, porque o eixo e diario.
+    #
+    # O tail e orcamento de render e nao recorte de vista: Plotly em SVG emite um
+    # retangulo por pregao POR SETOR e desenha todos, mesmo fora da janela
+    # visivel. Ver SECTOR_ROLLING_HISTORY.
     for sessoes in SECTOR_ROLLING_SESSIONS:
-        ctx[f"sectors_roll{sessoes}"] = make_sector_rolling_area(
+        ctx[f"sectors_roll{sessoes}"] = make_sector_weekly_stacked(
             build_sector_rolling(long_df, sessoes, "net_1d")
             .tail(SECTOR_ROLLING_HISTORY),
             f"ROLANTE: delta de {sessoes} pregões, net por setor "
-            "— área empilhada, linha = total",
-            obs_default=SECTOR_ROLLING_DEFAULT_VIEW,
+            "— empilhado, linha = total (último ano)",
+            weeks_default=SECTOR_ROLLING_DEFAULT_VIEW, date_col="Data",
         )
     return ctx
 

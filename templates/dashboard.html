@@ -402,7 +402,6 @@ window.JGPLazy = (function () {
   <button class="tabbtn" data-tab="offadj">Offshore Ajustado</button>
   <button class="tabbtn" data-tab="corporate">Corporate</button>
   <button class="tabbtn" data-tab="banks">Bancos</button>
-  <button class="tabbtn" data-tab="total">Total vs USDCLP</button>
   <button class="tabbtn" data-tab="pensoff">Fundos + Offshore</button>
   <button class="tabbtn" data-tab="sectors">Todos os Setores</button>
   <button class="tabbtn" data-tab="swap">Swap Cámara</button>
@@ -565,12 +564,6 @@ window.JGPLazy = (function () {
       </div>
     </div>
 
-    <!-- ══════════════════ TOTAL VS USDCLP ══════════════════ -->
-    <div id="tab-total" class="tab">
-      <h2>Positioning (pensiones + offshore) vs USDCLP</h2>
-      <p class="sub">Eixo do USDCLP invertido, para que as duas linhas andem no mesmo sentido quando o
-        posicionamento explica o câmbio.</p>
-      <div class="card">{{ total_vs_usdclp | safe }}</div>
     </div>
 
     <!-- ══════════════════ FUNDOS + OFFSHORE ══════════════════ -->
@@ -828,10 +821,10 @@ window.JGPChrome = (function () {
   var mq = window.matchMedia('(prefers-color-scheme: dark)');
   var tok = function (n) { return getComputedStyle(document.body).getPropertyValue(n).trim(); };
   // So as figuras da aba VISIVEL. Era document.querySelectorAll, e cada troca de
-  // aba e cada resize rodava resize+relayout nas 46 figuras da pagina, inclusive
-  // nas das abas escondidas — que tem largura zero, entao o relayout nem serve
-  // para nada la. Relayout de barra empilhada repinta um retangulo por ponto por
-  // setor, e era isso que travava a aba de setores.
+  // aba e cada resize rodava resize+relayout nas figuras todas da pagina,
+  // inclusive nas das abas escondidas — que tem largura zero, entao o relayout
+  // nem serve para nada la. Relayout de barra empilhada repinta um retangulo por
+  // ponto por serie, e era isso que travava a aba de setores.
   var plots = function () {
     var pane = document.querySelector('.tab.on');
     return [].slice.call((pane || document).querySelectorAll('.js-plotly-plot'));

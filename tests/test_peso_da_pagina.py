@@ -24,10 +24,16 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[1]
 PAGINA = RAIZ / "docs" / "index.html"
 
-# Tetos com folga sobre o medido (pior figura ~2.100, pagina ~24.000), para nao
-# quebrar a cada rebuild de dado mas ainda pegar um grafico novo que estoure.
+# O teto POR FIGURA e a guarda que importa: e ele que pega a marca errada — um
+# grafico diario novo com o historico inteiro, que foi o que travou a aba. Medida
+# atual: pior figura ~2.100.
 MAX_RECTS_POR_FIGURA = 3_000
-MAX_RECTS_NA_PAGINA = 28_000
+
+# O da pagina e frouxo de proposito. Medida atual ~27.500, e o numero cresce
+# sozinho: os empilhados semanais nao tem corte de historico, entao ganham ~52
+# barras por serie por ano (~360/ano na aba de setores). Um teto justo aqui
+# quebraria pelo tempo passar, sem ninguem ter feito nada errado.
+MAX_RECTS_NA_PAGINA = 32_000
 BARRA = chr(92)
 
 

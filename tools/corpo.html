@@ -19,7 +19,6 @@
   <button class="tabbtn" data-tab="offadj">Offshore Ajustado</button>
   <button class="tabbtn" data-tab="corporate">Corporate</button>
   <button class="tabbtn" data-tab="banks">Bancos</button>
-  <button class="tabbtn" data-tab="total">Total vs USDCLP</button>
   <button class="tabbtn" data-tab="pensoff">Fundos + Offshore</button>
   <button class="tabbtn" data-tab="sectors">Todos os Setores</button>
   <button class="tabbtn" data-tab="swap">Swap Cámara</button>
@@ -63,9 +62,9 @@
             observa no mesmo setor. As duas na mesma convenção: acima de zero =
             <b>compra de USD</b> (venda de CLP).
             <br><br>
-            <b>Atenção ao sinal.</b> Esta aba, a de <i>Fundos de Pensão</i> e a de
-            <i>Todos os Setores</i> usam a ótica do USD; a de <i>Offshore Ajustado</i>
-            segue na de compra de CLP, com o sinal oposto.
+            <b>Atenção ao sinal.</b> Esta aba, a de <i>Fundos de Pensão</i>, a de
+            <i>Offshore</i> e a de <i>Todos os Setores</i> usam a ótica do USD; a de
+            <i>Offshore Ajustado</i> segue na de compra de CLP, com o sinal oposto.
             <br><br>
             <b>Janela de 5 pregões</b>, não de 5 dias corridos: a série só tem dia
             útil, então o deslocamento é de exatamente cinco sessões. Com dias
@@ -98,13 +97,17 @@
     <!-- ══════════════════ OFFSHORE ══════════════════ -->
     <div id="tab-offshore" class="tab">
       <h2>Posição e resumo</h2>
-      <p class="sub">Sinal cru do BCCh: acima de zero = compra de CLP (venda de USD).</p>
+      <p class="sub">Convenção desta aba: <b>acima de zero = compra de USD</b>, abaixo de zero = venda de USD.
+        A série crua do BCCh vem na ótica do banco residente (positivo = offshore vendendo USD) e entra aqui
+        invertida, para bater com as abas de Fundos de Pensão, Fluxo AFP e Todos os Setores.</p>
       <div class="grid-wide">
         <div class="card">{{ offshore_line | safe }}</div>
         <div class="card">{{ offshore_table | safe }}</div>
       </div>
 
       <h2>Variação por janela</h2>
+      <p class="sub">Janelas em <b>pregões</b>, não em dias corridos: a série só tem dia útil, então o
+        deslocamento é de exatamente 5 e 21 sessões.</p>
       <div class="grid2">
         <div class="card">{{ offshore_delta5 | safe }}</div>
         <div class="card">{{ offshore_delta21 | safe }}</div>
@@ -114,8 +117,10 @@
     <!-- ══════════════════ OFFSHORE AJUSTADO ══════════════════ -->
     <div id="tab-offadj" class="tab">
       <h2>Posição ajustada e resumo</h2>
-      <p class="sub">Convenção de <b>compra de CLP</b>: acima de zero = comprando CLP (vendendo USD).
-        Invertida em relação às abas de Fundos de Pensão, Fluxo AFP e Todos os Setores.</p>
+      <p class="sub">Convenção de <b>compra de USD</b> em toda a aba: acima de zero = comprando USD
+        (vendendo CLP), abaixo de zero = vendendo USD. Mesma das abas de Fundos de Pensão, Offshore,
+        Fluxo AFP e Todos os Setores. O gráfico abre em jan/2025 com os eixos padronizados na janela
+        visível &mdash; zoom-out ou duplo-clique devolve a amostra inteira, com os eixos reajustados.</p>
       <div class="grid-wide">
         <div class="card">{{ offadj_chart | safe }}</div>
         <div class="card">{{ offadj_table | safe }}</div>
@@ -130,8 +135,16 @@
       <h2>Fluxo semanal por perna</h2>
       <div class="card">{{ offadj_weekly_bars | safe }}</div>
 
-      <h2>Net do offshore vs net dos fundos</h2>
-      <div class="card">{{ offadj_net_vs_afp | safe }}</div>
+      <h2>Janelas rolantes</h2>
+      <p class="sub">As duas pernas &mdash; <b>NDF</b> (variação do saldo forward de não residentes) e
+        <b>spot</b> (fluxo spot líquido observado pelo BCCh) &mdash; empilhadas, com o <b>net</b> das duas
+        na linha. Mesmos gráficos da aba de <i>Fluxo AFP</i>.
+        <br>
+        Aqui cada dia carrega a janela de N <b>pregões</b> que termina nele, então barras consecutivas
+        compartilham dias: leia como <b>nível de fluxo</b>, não como barras independentes &mdash; para isso
+        serve o bloco de 5 pregões acima, que não se sobrepõe.</p>
+      <div class="card">{{ offadj_roll5 | safe }}</div>
+      <div class="card">{{ offadj_roll21 | safe }}</div>
 
       <h2>Correlação com o spot</h2>
       <div class="card">{{ offadj_corr | safe }}</div>
@@ -168,12 +181,6 @@
       </div>
     </div>
 
-    <!-- ══════════════════ TOTAL VS USDCLP ══════════════════ -->
-    <div id="tab-total" class="tab">
-      <h2>Positioning (pensiones + offshore) vs USDCLP</h2>
-      <p class="sub">Eixo do USDCLP invertido, para que as duas linhas andem no mesmo sentido quando o
-        posicionamento explica o câmbio.</p>
-      <div class="card">{{ total_vs_usdclp | safe }}</div>
     </div>
 
     <!-- ══════════════════ FUNDOS + OFFSHORE ══════════════════ -->
@@ -188,6 +195,15 @@
       <p class="sub">Convenção de <b>compra de USD</b>. Empilhado: os compradores de USD sobem e os
         vendedores descem; a linha preta liga o net de cada semana.</p>
       <div class="card">{{ sectors_net | safe }}</div>
+
+      <h2>Net em janelas rolantes</h2>
+      <p class="sub">O mesmo empilhado acima, mas com a janela andando pregão a pregão em vez de fechar
+        na sexta: cada barra carrega os últimos 5 (ou 21) <b>pregões</b>.
+        <br>
+        Barras consecutivas compartilham dias, então leia como <b>nível de fluxo</b> e não como barras
+        independentes &mdash; para isso serve o semanal acima, cujos blocos não se sobrepõem.</p>
+      <div class="card">{{ sectors_roll5 | safe }}</div>
+      <div class="card">{{ sectors_roll21 | safe }}</div>
 
       <h2>Pernas: NDF e spot</h2>
       <div class="card">{{ sectors_ndf | safe }}</div>
