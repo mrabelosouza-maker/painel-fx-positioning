@@ -43,6 +43,18 @@ SHIM_CSS = """
   /* Os graficos vem prontos do Python (plotly to_html); o card e a moldura. */
   .card .js-plotly-plot{width:100%!important}
   .card > .plotly-graph-div{margin:0 auto}
+  /* Card cuja figura ainda nao nasceu, por causa do render preguicoso (LAZY_JS):
+     sem o retangulo branco. O --bg-content e #FFFFFF sobre um papel creme, e a
+     aba de setores tem cinco figuras de 560px — quase tres mil pixels de branco
+     enquanto elas desenham.
+
+     O Plotly poe .js-plotly-plot na propria div quando desenha, entao a AUSENCIA
+     dela e o sinal de pendente. Some so o fundo e a borda; a altura fica, senao
+     o layout salta quando a figura aparece. */
+  .card:has(> div > .plotly-graph-div:not(.js-plotly-plot)),
+  .card:has(> .plotly-graph-div:not(.js-plotly-plot)){
+    background:transparent;border-color:transparent
+  }
 
   /* Tabelas emitidas pelo table_builder.py (.data-table) na moldura JGP:
      cabecalho verde, numeros tabulares, agregados com risco em cima. */
@@ -166,18 +178,56 @@ window.JGPLazy = (function () {
     };
   }
 
+  function solta(id) {
+    var args = fila[id];
+    delete fila[id];
+    try { real.apply(Plotly, args); } catch (e) {}
+  }
+
+  // Chamado pelo showTab: as figuras da aba que abriu, agora, de uma vez.
   function flush() {
     if (!real) return 0;
     var soltar = Object.keys(fila).filter(visivel);
-    soltar.forEach(function (id) {
-      var args = fila[id];
-      delete fila[id];
-      try { real.apply(Plotly, args); } catch (e) {}
-    });
+    soltar.forEach(solta);
     return soltar.length;
   }
 
-  return { flush: flush, pendentes: function () { return Object.keys(fila).length; } };
+  // E o resto vai desenhando em tempo ocioso, uma figura por vez, ANTES de
+  // alguem clicar na aba. Sem isto o adiamento so muda o lugar da espera: a aba
+  // de setores abria com cinco cards vazios de 560px, quase tres mil pixels de
+  // branco, ate as figuras nascerem. Uma por callback para nao segurar o thread
+  // e nao competir com o scroll.
+  //
+  // A figura nasce em aba escondida, que tem display:none e portanto largura
+  // zero, entao sai medida errada — e o reflow do onTab a corrige quando a aba
+  // aparece, que e o que a camada do painel ja fazia antes de existir fila.
+  function ocioso() {
+    var ids = Object.keys(fila);
+    if (!ids.length) return;
+    solta(ids[0]);
+    agenda();
+  }
+
+  function agenda() {
+    if (!real || !Object.keys(fila).length) return;
+    if (window.requestIdleCallback) {
+      window.requestIdleCallback(ocioso, { timeout: 600 });
+    } else {
+      setTimeout(ocioso, 120);
+    }
+  }
+
+  // Depois do load: primeiro a aba aberta fica pronta e interativa, e so entao
+  // as escondidas consomem o tempo que sobra.
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('load', function () { setTimeout(agenda, 200); });
+  }
+
+  return {
+    flush: flush,
+    agenda: agenda,
+    pendentes: function () { return Object.keys(fila).length; },
+  };
 })();
 </script>"""
 

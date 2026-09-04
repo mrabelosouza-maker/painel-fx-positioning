@@ -8,7 +8,10 @@ Plotly falsos, para checar o comportamento que importa:
   - figura da aba visivel desenha na hora;
   - figura de aba escondida NAO desenha, fica na fila;
   - quando a aba abre, o flush solta so as dela;
-  - figura fora de qualquer aba desenha na hora (o seguro).
+  - figura fora de qualquer aba desenha na hora (o seguro);
+  - e o prerender ocioso esvazia a fila SEM a aba abrir, uma por callback --
+    sem isso o adiamento so mudava o lugar da espera, e a aba abria mostrando
+    cards vazios.
 """
 import io
 import json
@@ -51,7 +54,20 @@ global.document = {
 global.Plotly = {
   newPlot: function (id) { desenhadas.push(id); return Promise.resolve(); },
 };
-global.window = {};
+// requestIdleCallback controlado: nada roda sozinho, o teste e que bombeia.
+var idle = [];
+global.window = {
+  requestIdleCallback: function (cb) { idle.push(cb); },
+  addEventListener: function () {},   // o shim registra no load; aqui nao dispara
+};
+function bombeiaIdle(maximo) {
+  var voltas = 0;
+  while (idle.length && voltas < maximo) {
+    idle.shift()();
+    voltas += 1;
+  }
+  return voltas;
+}
 global.Promise = Promise;
 """
 
@@ -76,6 +92,23 @@ resultado.pendentesDepoisDoFlush = L.pendentes();
 // Flush de novo nao pode desenhar a mesma figura outra vez.
 L.flush();
 resultado.depoisDoSegundoFlush = desenhadas.slice();
+
+// ── prerender ocioso: a aba volta a ficar escondida e ganha duas figuras ──
+escondidaPane.classList._on = false;
+desenhadas.length = 0;
+divs.esc1 = new Div('esc1', escondidaPane);
+divs.esc2 = new Div('esc2', escondidaPane);
+Plotly.newPlot('esc1', [], {});
+Plotly.newPlot('esc2', [], {});
+resultado.enfileiradasEscondidas = L.pendentes();
+resultado.desenhadasAntesDoIdle = desenhadas.slice();
+
+L.agenda();
+resultado.umaPorCallback = (bombeiaIdle(1), desenhadas.slice());
+bombeiaIdle(10);
+resultado.depoisDoIdle = desenhadas.slice();
+resultado.pendentesDepoisDoIdle = L.pendentes();
+resultado.abaSegueEscondida = !escondidaPane.classList.contains('on');
 
 console.log(JSON.stringify(resultado));
 """
@@ -139,3 +172,22 @@ def test_abrir_a_aba_solta_a_figura(resultado):
 
 def test_flush_repetido_nao_redesenha(resultado):
     assert resultado["depoisDoSegundoFlush"] == resultado["depoisDoFlush"]
+
+
+# ── prerender ocioso ──────────────────────────────────────────────────
+def test_o_idle_nao_roda_antes_de_ser_agendado(resultado):
+    assert resultado["enfileiradasEscondidas"] == 2
+    assert resultado["desenhadasAntesDoIdle"] == []
+
+
+def test_desenha_uma_figura_por_callback(resultado):
+    # Uma por vez de proposito: soltar a fila toda num callback seguraria o
+    # thread e competiria com o scroll, que e o que o adiamento evita.
+    assert len(resultado["umaPorCallback"]) == 1
+
+
+def test_esvazia_a_fila_sem_a_aba_abrir(resultado):
+    # O ponto todo: quando o usuario clicar, a aba ja esta desenhada.
+    assert resultado["abaSegueEscondida"] is True
+    assert sorted(resultado["depoisDoIdle"]) == ["esc1", "esc2"]
+    assert resultado["pendentesDepoisDoIdle"] == 0
