@@ -814,20 +814,29 @@ def make_afp_daily_bars(afp_df: pd.DataFrame, col: str, title: str, color: str) 
 # substituicoes, todos falham igual ou pior. O alivio e o previsto para o caso:
 # as tres tabelas da mesma aba nomeiam cada setor com os seus numeros, entao a
 # identidade nunca depende so da cor.
+# Tons dessaturados no lugar da Set1 do ColorBrewer, que era saturada e opaca:
+# numa pilha de sete setores a Set1 vibra e cansa, e o vermelho e o laranja dela
+# competiam com as etiquetas de convencao de sinal do proprio grafico. Estes
+# ficam mais leves aos olhos e separam melhor no vermelho-verde.
 SECTOR_LINE_COLORS = {
-    "Fondos de pensiones": "#377eb8",      # azul
-    "Companias de seguros": "#4daf4a",     # verde
-    "Empresas sector real": "#984ea3",     # roxo
-    "Corredoras de bolsa": "#e41a1c",      # vermelho
-    "Adm generales de fondos": "#f781bf",  # rosa
-    "Otros sectores": "#a65628",           # marrom
-    "No residentes": "#ff7f00",            # laranja
+    "Fondos de pensiones": "#6BAED6",      # azul suave
+    "Companias de seguros": "#74C476",     # verde suave
+    "Empresas sector real": "#B39DDB",     # lilas
+    "Corredoras de bolsa": "#EF8A82",      # coral
+    "Adm generales de fondos": "#F2A9CE",  # rosa suave
+    "Otros sectores": "#C4A484",           # areia
+    "No residentes": "#FDB863",            # ambar
     "TOTAL (todos os setores)": "#111827",
 }
+
+# Opacidade das barras. Num empilhado os segmentos sao vizinhos, nao sobrepostos,
+# entao isto nao mistura cor: so clareia cada fatia contra o papel.
+SECTOR_BAR_OPACITY = 0.8
 
 
 def make_sector_weekly_stacked(
     wk: pd.DataFrame, title: str, weeks_default: int = 26,
+    date_col: str = "Semana",
 ) -> str:
     """Net semanal empilhado por setor, em compra-de-USD.
 
@@ -839,14 +848,18 @@ def make_sector_weekly_stacked(
     O total vai como linha com marcadores e nao como barra: numa pilha com sinais
     dos dois lados a altura liquida nao e visivel, e a linha liga onde as duas
     pilhas se encontram em cada semana.
+
+    `date_col`: "Semana" para o agregado semanal, "Data" para as versoes diarias
+    rolantes. Com "Data" o `weeks_default` passa a contar observacoes, nao
+    semanas — mesma convencao de `make_weekly_legs_bars`.
     """
     if wk.empty or len(wk.columns) < 2:
         return "<p>Dados indisponíveis</p>"
 
     # Data curta: com 26 barras e rotulo -45 graus, "2026-08-28" nao cabe.
-    x_str = wk["Semana"].dt.strftime("%d/%m/%y").tolist()
+    x_str = wk[date_col].dt.strftime("%d/%m/%y").tolist()
     total_col = next((c for c in wk.columns if c.startswith("TOTAL")), None)
-    setores = [c for c in wk.columns if c != "Semana" and c != total_col]
+    setores = [c for c in wk.columns if c != date_col and c != total_col]
 
     fig = go.Figure()
     for col in setores:
@@ -854,8 +867,10 @@ def make_sector_weekly_stacked(
             x=x_str, y=wk[col], name=col,
             marker=dict(
                 color=SECTOR_LINE_COLORS.get(col),
+                opacity=SECTOR_BAR_OPACITY,
                 # Fio branco entre segmentos: separa as fatias sem depender do
-                # contraste entre as cores vizinhas.
+                # contraste entre as cores vizinhas. Com a paleta suave isto
+                # pesa mais, porque as fatias vizinhas contrastam menos.
                 line=dict(color="white", width=1),
             ),
             hovertemplate=f"{col}: %{{y:+,.0f}} mm USD<extra></extra>",

@@ -147,6 +147,31 @@ def make_afp_legs_table(
     """
 
 
+# Verde = compra de USD, vermelho = venda. Nao e juizo de bom/ruim: e a mesma
+# convencao que as etiquetas de sinal dos graficos da aba ja usam (_usd_side_labels),
+# entao a tabela e o grafico se leem com o mesmo codigo de cor.
+_HEAT_COMPRA = (0, 176, 80)     # JGP_VERDE
+_HEAT_VENDA = (230, 57, 70)     # JGP_VERMELHO
+# Teto de alpha baixo de proposito: a tinta serve para varrer a coluna com o
+# olho, e o numero tem de continuar legivel por cima dela nos dois modos.
+_HEAT_ALPHA_MAX = 0.42
+
+
+def _heat_style(val, escala: float) -> str:
+    """Fundo da celula proporcional a |val| dentro da coluna, divergente no sinal.
+
+    `escala` e o |valor| de referencia da coluna. Devolve string vazia quando nao
+    ha o que tingir, para a celula cair na regra CSS normal.
+    """
+    if val is None or pd.isna(val) or not escala or escala <= 0:
+        return ""
+    intensidade = min(abs(float(val)) / escala, 1.0)
+    if intensidade < 0.02:
+        return ""
+    r, g, b = _HEAT_COMPRA if float(val) > 0 else _HEAT_VENDA
+    return f" style='background:rgba({r},{g},{b},{intensidade * _HEAT_ALPHA_MAX:.3f})'"
+
+
 def make_sector_flow_table(
     tab: pd.DataFrame, sessoes: int, inicio, fim,
 ) -> str:
@@ -167,6 +192,16 @@ def make_sector_flow_table(
     )
     rotulo = "1 PREGÃO" if sessoes == 1 else f"{sessoes} PREGÕES"
 
+    # Escala da tinta por coluna, tirada SO das folhas: um agregado e a soma
+    # delas, entao entraria como o maximo e achataria todas as folhas em quase
+    # branco. Por isso os agregados tambem nao recebem tinta — ja se destacam
+    # pela faixa cinza e pelo negrito, e a faixa e o que a tinta apagaria.
+    flows = ("ndf", "spot", "net")
+    folhas = tab[~tab.index.isin(SECTOR_AGGREGATES)]
+    escalas = {
+        c: (folhas[c].abs().max() if c in folhas.columns else None) for c in flows
+    }
+
     linhas = []
     for setor, row in tab.iterrows():
         agg = setor in SECTOR_AGGREGATES
@@ -175,12 +210,17 @@ def make_sector_flow_table(
         recuo = "" if agg else "style='padding-left:22px'"
         cells = [f"<td {recuo}>{nome}</td>"]
         for c in ("ndf", "spot", "net", "ndf_level"):
-            cells.append(f"<td class='num'>{_fmt(row.get(c), 0)}</td>")
+            # Saldo NDF fica sem tinta: e estoque, nao movimento da janela, e na
+            # mesma escala de cor competiria com as tres pernas de fluxo, que sao
+            # o que a tabela existe para mostrar.
+            tinta = "" if (agg or c not in flows) else _heat_style(row.get(c), escalas[c])
+            cells.append(f"<td class='num'{tinta}>{_fmt(row.get(c), 0)}</td>")
         linhas.append(f"<tr{cls}>" + "".join(cells) + "</tr>")
 
     return f"""
     <div class="table-title">{rotulo} &mdash; NDF + spot por setor (mm USD, + compra de USD)</div>
-    <div class="table-subtitle">Janela {janela} &middot; as seis folhas somam Residentes no bancos; este mais No residentes soma o total</div>
+    <div class="table-subtitle">Janela {janela} &middot; as seis folhas somam Residentes no bancos; este mais No residentes soma o total
+    <br>Fundo <span class="heat-key heat-key-compra">verde</span> = compra de USD, <span class="heat-key heat-key-venda">vermelho</span> = venda; intensidade proporcional ao maior |valor| entre as folhas da coluna</div>
     <table class="data-table">
         <thead><tr>
             <th>Setor</th><th>&Delta; NDF</th><th>Spot</th><th>Net</th><th>Saldo NDF</th>

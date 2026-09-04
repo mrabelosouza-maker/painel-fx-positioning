@@ -292,7 +292,15 @@
   table.data-table thead th:first-child{text-align:left}
   table.data-table td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.data-table td.row-label{text-align:left;font-weight:600}
-  table.data-table tbody tr:hover td{background:var(--jgp-green-tint)}
+  /* A formatacao condicional das tabelas de setores sai como background inline,
+     que vence esta regra por especificidade. !important devolve o hover: a tinta
+     serve para varrer a coluna com o olho, e ao passar o mouse a linha inteira
+     se destaca limpa, para ler os numeros. */
+  table.data-table tbody tr:hover td{background:var(--jgp-green-tint) !important}
+  /* Amostras de cor na legenda da tinta, no subtitulo da tabela. */
+  .heat-key{padding:0 5px;border-radius:3px;font-weight:600;color:var(--ink-primary)}
+  .heat-key-compra{background:rgba(0,176,80,.34)}
+  .heat-key-venda{background:rgba(230,57,70,.34)}
   table.data-table tr.row-agg td{background:var(--sec);font-weight:700;
     border-top:2px solid var(--rule-strong)}
   .table-title{font-size:14px;font-weight:700;color:var(--chart-title);margin:0 0 2px;letter-spacing:-.01em}
@@ -524,6 +532,15 @@
       <p class="sub">Convenção de <b>compra de USD</b>. Empilhado: os compradores de USD sobem e os
         vendedores descem; a linha preta liga o net de cada semana.</p>
       <div class="card">{{ sectors_net | safe }}</div>
+
+      <h2>Net em janelas rolantes</h2>
+      <p class="sub">O mesmo empilhado acima, mas com a janela andando pregão a pregão em vez de fechar
+        na sexta: cada barra carrega os últimos 5 (ou 21) <b>pregões</b>.
+        <br>
+        Barras consecutivas compartilham dias, então leia como <b>nível de fluxo</b> e não como barras
+        independentes &mdash; para isso serve o semanal acima, cujos blocos não se sobrepõem.</p>
+      <div class="card">{{ sectors_roll5 | safe }}</div>
+      <div class="card">{{ sectors_roll21 | safe }}</div>
 
       <h2>Pernas: NDF e spot</h2>
       <div class="card">{{ sectors_ndf | safe }}</div>

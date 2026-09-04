@@ -20,6 +20,7 @@ from data_processor import (
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
     build_offshore_rolling_legs,
     build_all_sectors_flow, build_sector_window_table, build_sector_weekly,
+    build_sector_rolling,
     build_afp_spot_flow, build_afp_5d_legs, build_afp_weekly_legs,
     build_afp_rolling_legs, build_afp_levels,
 )
@@ -396,6 +397,7 @@ def build_sectors_section(dados):
         indisp = "<p>Dados por setor indisponíveis</p>"
         return {
             "sectors_net": indisp, "sectors_ndf": indisp, "sectors_spot": indisp,
+            "sectors_roll5": indisp, "sectors_roll21": indisp,
             **{f"sectors_table_{d}": "<p>—</p>" for d in SECTOR_WINDOWS},
         }
 
@@ -415,6 +417,17 @@ def build_sectors_section(dados):
         ctx[chave] = make_sector_weekly_stacked(
             build_sector_weekly(long_df, col),
             f"{titulo} — empilhado, linha = total",
+        )
+
+    # Do net, tambem a versao rolante: mesma pilha, mas a janela anda pregao a
+    # pregao. weeks_default conta observacoes aqui, nao semanas, porque o eixo
+    # e diario.
+    for chave, sessoes in [("sectors_roll5", 5), ("sectors_roll21", 21)]:
+        ctx[chave] = make_sector_weekly_stacked(
+            build_sector_rolling(long_df, sessoes, "net_1d"),
+            f"ROLANTE: delta de {sessoes} pregões, net por setor "
+            "— empilhado, linha = total",
+            weeks_default=120, date_col="Data",
         )
     return ctx
 

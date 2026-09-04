@@ -794,3 +794,34 @@ def build_sector_weekly(long_df: pd.DataFrame, col: str = "net_1d") -> pd.DataFr
     # min_count=len(cols): so existe na semana em que todos os setores existem.
     wk[SECTOR_NET_LINE] = wk.sum(axis=1, min_count=len(cols))
     return wk.dropna(how="all").rename_axis("Semana").reset_index()
+
+
+def build_sector_rolling(
+    long_df: pd.DataFrame, sessoes: int, col: str = "net_1d",
+) -> pd.DataFrame:
+    """Soma movel de `sessoes` pregoes de uma perna, por setor, mais o total.
+
+    A versao rolante do `build_sector_weekly`: em vez de fechar a semana na
+    sexta, cada pregao carrega a janela que termina nele. Barras consecutivas
+    compartilham dias, entao a leitura e de nivel de fluxo e nao de barras
+    independentes — para isso serve o semanal.
+
+    Mesmos setores e mesma coluna de total do semanal, entao o grafico empilhado
+    e o mesmo; muda so o nome da coluna de data ("Data", nao "Semana").
+    """
+    if long_df.empty:
+        return pd.DataFrame()
+
+    d = long_df[long_df["setor"].isin(SECTOR_CHART_LINES)]
+    largo = d.pivot_table(index="Data", columns="setor", values=col, aggfunc="sum")
+    cols = [c for c in SECTOR_CHART_LINES if c in largo.columns]
+    if not cols:
+        return pd.DataFrame()
+
+    # min_periods=sessoes: janela incompleta nao vira barra parcial.
+    roll = largo[cols].rolling(sessoes, min_periods=sessoes).sum()
+    # Total somado das proprias barras, como no semanal: a linha preta e por
+    # construcao o que se ve somando as fatias. min_count=len(cols) para a
+    # janela em que falta um setor nao virar total menor sem aviso.
+    roll[SECTOR_NET_LINE] = roll.sum(axis=1, min_count=len(cols))
+    return roll.dropna(how="all").rename_axis("Data").reset_index()
