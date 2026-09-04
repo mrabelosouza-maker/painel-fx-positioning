@@ -14,7 +14,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jinja2 import Environment, FileSystemLoader
 
-from config import SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START
+from config import (
+    SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START,
+    SECTOR_ROLLING_SESSIONS, SECTOR_ROLLING_DEFAULT_VIEW,
+    SECTOR_ROLLING_HISTORY,
+)
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
     build_offshore_adjusted, build_weekly_legs, build_offshore_corr,
@@ -34,6 +38,7 @@ from chart_builder import (
     make_colombia_line_chart,
     make_weekly_legs_bars,
     make_sector_weekly_stacked,
+    make_sector_rolling_area,
     make_offshore_corr_chart,
     AFP_LEG_COLORS,
     JGP_AZUL,
@@ -397,7 +402,7 @@ def build_sectors_section(dados):
         indisp = "<p>Dados por setor indisponíveis</p>"
         return {
             "sectors_net": indisp, "sectors_ndf": indisp, "sectors_spot": indisp,
-            "sectors_roll5": indisp, "sectors_roll21": indisp,
+            **{f"sectors_roll{s}": indisp for s in SECTOR_ROLLING_SESSIONS},
             **{f"sectors_table_{d}": "<p>—</p>" for d in SECTOR_WINDOWS},
         }
 
@@ -419,15 +424,17 @@ def build_sectors_section(dados):
             f"{titulo} — empilhado, linha = total",
         )
 
-    # Do net, tambem a versao rolante: mesma pilha, mas a janela anda pregao a
-    # pregao. weeks_default conta observacoes aqui, nao semanas, porque o eixo
-    # e diario.
-    for chave, sessoes in [("sectors_roll5", 5), ("sectors_roll21", 21)]:
-        ctx[chave] = make_sector_weekly_stacked(
-            build_sector_rolling(long_df, sessoes, "net_1d"),
+    # Do net, tambem a versao rolante: mesma composicao, mas a janela anda
+    # pregao a pregao. Vai como area empilhada divergente, nao como barra: a
+    # serie e um nivel de fluxo (barras vizinhas compartilhariam pregoes) e a
+    # barra custava um retangulo por setor por pregao.
+    for sessoes in SECTOR_ROLLING_SESSIONS:
+        ctx[f"sectors_roll{sessoes}"] = make_sector_rolling_area(
+            build_sector_rolling(long_df, sessoes, "net_1d")
+            .tail(SECTOR_ROLLING_HISTORY),
             f"ROLANTE: delta de {sessoes} pregões, net por setor "
-            "— empilhado, linha = total",
-            weeks_default=120, date_col="Data",
+            "— área empilhada, linha = total",
+            obs_default=SECTOR_ROLLING_DEFAULT_VIEW,
         )
     return ctx
 

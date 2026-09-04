@@ -834,6 +834,115 @@ SECTOR_LINE_COLORS = {
 SECTOR_BAR_OPACITY = 0.8
 
 
+def _f32(serie: pd.Series):
+    """Serie em float32, para o Plotly serializar metade dos bytes.
+
+    O Plotly 6 manda array numerico como base64 binario, que ao contrario do
+    texto NAO comprime no gzip: e o que sobra no transporte depois do gzip. Em
+    float32 sao ~7 digitos significativos, e estes valores sao milhoes de USD
+    exibidos sem decimal — a perda nao chega ao numero que aparece.
+    """
+    return serie.astype("float32").to_numpy()
+
+
+def _rgba(hexa: str, alpha: float) -> str:
+    """#RRGGBB -> rgba(r,g,b,alpha), para preenchimento de area translucido."""
+    h = (hexa or "#000000").lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def make_sector_rolling_area(
+    roll: pd.DataFrame, title: str, obs_default: int = 120,
+    date_col: str = "Data",
+) -> str:
+    """Empilhado divergente por setor de uma serie ROLANTE, como area.
+
+    Area e nao barra, por dois motivos que apontam para o mesmo lado.
+
+    De leitura: numa janela rolante barras consecutivas compartilham pregoes, e
+    a serie e um nivel de fluxo, nao uma sequencia de blocos independentes. Barra
+    promete independencia que o dado nao tem — o empilhado semanal, cujos blocos
+    de fato nao se sobrepoem, e que merece barra.
+
+    De custo: Plotly em SVG emite um retangulo por ponto por setor e desenha
+    todos, mesmo fora da janela visivel do eixo. Com sete setores e o historico
+    diario inteiro isso passava de dez mil retangulos por grafico e travava a
+    aba. Como area, o mesmo dado sao dois caminhos por setor.
+
+    O empilhamento divergente (positivos para cima, negativos para baixo, que e
+    o que `barmode="relative"` faz numa coluna) sai de dois `stackgroup`: cada
+    setor entra duas vezes, com a parte positiva num e a negativa no outro. A
+    metade negativa nao vai a legenda nem ao hover; a positiva carrega o valor
+    verdadeiro com sinal em `customdata`, entao o hover mostra um numero por
+    setor, correto nos dois lados do zero.
+    """
+    if roll.empty or len(roll.columns) < 2:
+        return "<p>Dados indisponíveis</p>"
+
+    x_str = roll[date_col].dt.strftime("%d/%m/%y").tolist()
+    total_col = next((c for c in roll.columns if c.startswith("TOTAL")), None)
+    setores = [c for c in roll.columns if c != date_col and c != total_col]
+
+    fig = go.Figure()
+    for col in setores:
+        v = roll[col]
+        cor = SECTOR_LINE_COLORS.get(col) or JGP_CINZA
+        preenche = _rgba(cor, SECTOR_BAR_OPACITY)
+        # Fio branco fino entre bandas, no lugar do fio entre barras: com a
+        # paleta suave as fatias vizinhas contrastam pouco.
+        borda = dict(width=0.5, color="white")
+        # stackgroup nao empilha NaN. Na pratica nao ha nenhum aqui (a janela
+        # rolante cai inteira quando falta dado), mas se houvesse a banda viraria
+        # espessura zero — e a linha do total, que nao e preenchida, abre o
+        # buraco de verdade e denuncia.
+        fig.add_trace(go.Scatter(
+            x=x_str, y=_f32(v.clip(lower=0).fillna(0.0)), name=col,
+            legendgroup=col, mode="lines", line=borda,
+            fillcolor=preenche, stackgroup="pos",
+            customdata=_f32(v),
+            hovertemplate=f"{col}: %{{customdata:+,.0f}} mm USD<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=x_str, y=_f32(v.clip(upper=0).fillna(0.0)), name=col,
+            legendgroup=col, showlegend=False, mode="lines", line=borda,
+            fillcolor=preenche, stackgroup="neg", hoverinfo="skip",
+        ))
+
+    if total_col:
+        fig.add_trace(go.Scatter(
+            x=x_str, y=roll[total_col], name=total_col, mode="lines",
+            line=dict(color="black", width=1.6),
+            hovertemplate=f"{total_col}: %{{y:+,.0f}} mm USD<extra></extra>",
+        ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+
+    fig.update_layout(
+        title=title, template="jgp", height=560,
+        margin=dict(l=60, r=20, t=64, b=170),
+        yaxis_title="USD million (+ compra de USD)",
+        legend=dict(orientation="h", yanchor="top", y=-0.30, xanchor="left", x=0),
+        hovermode="x unified",
+    )
+    fig.update_xaxes(type="category", tickangle=-45, nticks=14)
+
+    n = len(x_str)
+    visivel = roll.tail(obs_default) if n > obs_default else roll
+    # Numa pilha o alcance e a soma dos positivos e a dos negativos do dia, nao
+    # o maior setor isolado.
+    v = visivel[setores]
+    lim = max(
+        v.clip(lower=0).sum(axis=1).max(),
+        v.clip(upper=0).sum(axis=1).abs().max(),
+    ) * 1.15
+    lim = lim if lim and lim > 0 else 1.0
+    fig.update_yaxes(range=[-lim, lim])
+    _usd_side_labels(fig)
+    if n > obs_default:
+        fig.update_xaxes(range=[n - obs_default - 0.5, n - 0.5])
+    return _to_html(fig)
+
+
 def make_sector_weekly_stacked(
     wk: pd.DataFrame, title: str, weeks_default: int = 26,
     date_col: str = "Semana",

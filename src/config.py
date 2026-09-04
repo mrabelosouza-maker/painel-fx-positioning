@@ -224,3 +224,22 @@ SECTOR_NET_LINE = "TOTAL (todos os setores)"
 # feriado), e o resto do painel ja conta pregao (OFFSHORE_WEEKLY_SESSIONS,
 # AFP_DELTA_SESSIONS).
 SECTOR_WINDOWS = [1, 5, 21]
+
+# Janelas dos dois empilhados ROLANTES da aba, em pregoes. Vao como area
+# divergente (make_sector_rolling_area) e nao como barra: barra prometeria
+# blocos independentes, que uma janela rolante nao tem, e custava um retangulo
+# por setor por pregao — mais de dez mil por grafico, que travava a aba. Como
+# area o historico inteiro cabe em dois caminhos por setor.
+SECTOR_ROLLING_SESSIONS = [5, 21]
+
+# Observacoes na janela inicial do eixo x (~6 meses); o zoom-out abre o resto.
+SECTOR_ROLLING_DEFAULT_VIEW = 120
+
+# Historico dos rolantes, em pregoes (~3 anos), = 6x a janela inicial.
+#
+# Como area o custo de DOM ja nao depende do tamanho da serie, mas o de
+# transporte depende: o Plotly repete o array de datas em cada trace e manda os
+# numeros em base64 binario, que nao comprime no gzip. O historico longo da
+# composicao por setor continua inteiro nos tres empilhados semanais da aba, que
+# e onde ele se le — um rolante de 5 pregoes aberto em seis anos e borrao.
+SECTOR_ROLLING_HISTORY = 750
