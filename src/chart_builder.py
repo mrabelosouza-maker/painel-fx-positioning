@@ -833,22 +833,49 @@ SECTOR_LINE_COLORS = {
 # entao isto nao mistura cor: so clareia cada fatia contra o papel.
 SECTOR_BAR_OPACITY = 0.8
 
-# Prazo e categoria ORDENADA, entao rampa sequencial e nao paleta categorica: a
-# ordem do balde tem de se ler na cor, do claro (curto) ao escuro (longo), sem
-# precisar da legenda. Rampa azul de proposito — verde e vermelho ja significam
-# compra e venda nas tabelas desta aba, e reusa-los aqui competiria com isso.
+# Paleta dos prazos. A escolha obvia — rampa sequencial de uma matiz, porque
+# prazo e categoria ordenada — nao serve AQUI, e vale registrar por que, senao
+# alguem "conserta" isto de volta:
+#
+#   1. As cores sao gravadas no HTML no build (plotly to_html), entao UMA paleta
+#      tem de sobreviver ao papel branco (#FFFFFF) e ao fundo escuro (#1a1a19).
+#   2. Uma rampa de 6 passos precisa de vao de luminosidade entre passos
+#      vizinhos para se ler; isso exige um span que faz a ponta clara sumir no
+#      claro OU a ponta escura sumir no escuro. Medido: a rampa azul que estava
+#      aqui dava 1,42:1 na ponta clara sobre branco e 1,36:1 na escura sobre o
+#      fundo escuro, contra um piso de 2:1. Falhava nos DOIS modos, em pontas
+#      opostas.
+#   3. Varrer a matiz suavemente tambem nao salva: vizinhos ficam perto demais e
+#      colapsam sob deuteranopia. Busca exaustiva sobre arcos de matiz: zero
+#      combinacoes aprovadas.
+#
+# Sobra trocar ordem-na-cor por discriminacao, que e o que uma pilha precisa.
+# Estas seis foram achadas por busca sobre OKLCH dentro da INTERSECAO das bandas
+# de luminosidade dos dois modos (L 0,48-0,67) e validadas com
+# skills/dataviz/scripts/validate_palette.js nos dois:
+#
+#   pior par vizinho: ΔE 16,0 (deuteranopia) e 17,9 (visao normal)
+#   contraste: todas >= 3:1 sobre as duas superficies
+#
+# A ORDEM do array e parte do resultado — a checagem e entre vizinhos, e numa
+# pilha so vizinhos se tocam. Reordenar invalida a validacao.
+#
+# A ordem do prazo, que a cor deixou de carregar, fica na ordem da legenda, na
+# posicao da fatia na pilha e no grafico agregado de tres grupos ao lado.
 PRAZO_CORES = {
-    "Até 7 dias":      "#C6DBEF",
-    "8 a 35 dias":     "#9ECAE1",
-    "36 a 95 dias":    "#6BAED6",
-    "96 a 185 dias":   "#4292C6",
-    "186 a 370 dias":  "#2171B5",
-    "Mais de 1 ano":   "#08306B",
-    # Os tres grupos pegam pontos bem separados da MESMA rampa, entao o grafico
-    # agregado se le como uma versao grossa do detalhado, e nao como outro mapa.
-    "Curtíssimo (até 35d)": "#9ECAE1",
-    "Médio (36 a 185d)":    "#4292C6",
-    "Longo (186d ou mais)": "#08306B",
+    "Até 7 dias":      "#4791d5",  # azul
+    "8 a 35 dias":     "#ae7607",  # ambar
+    "36 a 95 dias":    "#ac68ad",  # orquidea
+    "96 a 185 dias":   "#7c9330",  # oliva
+    "186 a 370 dias":  "#8c7cd1",  # lilas
+    "Mais de 1 ano":   "#ab4c64",  # vinho
+    # Os tres grupos sao o subconjunto mais separado dos seis: das 20
+    # combinacoes possiveis, esta e a que passa all-pairs (nao so vizinhos) nos
+    # dois modos com a maior margem — ΔE 12,0 sob deuteranopia, 15,7 em visao
+    # normal. Azul+lilas, que parecia natural, colapsa em ΔE 0,8.
+    "Curtíssimo (até 35d)": "#4791d5",
+    "Médio (36 a 185d)":    "#ae7607",
+    "Longo (186d ou mais)": "#ab4c64",
     "TOTAL (todos os prazos)": "#111827",
 }
 
