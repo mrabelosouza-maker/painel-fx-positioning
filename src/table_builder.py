@@ -228,3 +228,49 @@ def make_sector_flow_table(
         <tbody>{"".join(linhas)}</tbody>
     </table>
     """
+
+
+def make_prazo_table(
+    tab: pd.DataFrame, titulo: str, subtitulo: str,
+    colunas: list[tuple[str, str]], tintas: set[str],
+) -> str:
+    """Tabela da aba de offshore por prazo: um balde por linha, em compra-de-USD.
+
+    `colunas` sao pares (chave no df, rotulo no cabecalho); `tintas` diz quais
+    delas recebem fundo proporcional. A linha de total vem do proprio df — e a
+    ultima, pelo nome comecando com "TOTAL" — e sai em negrito sem tinta, como
+    os agregados da tabela de setores: ela ja se destaca pela faixa, e a tinta
+    apagaria a faixa. A escala sai so das fatias, senao o total viraria o maximo
+    da coluna e achataria todas as outras em quase branco.
+    """
+    if tab.empty:
+        return "<p>—</p>"
+
+    eh_total = tab.index.str.startswith("TOTAL")
+    fatias = tab[~eh_total]
+    escalas = {
+        c: (fatias[c].abs().max() if c in fatias.columns else None)
+        for c, _ in colunas
+    }
+
+    linhas = []
+    for prazo, row in tab.iterrows():
+        agg = bool(prazo.startswith("TOTAL"))
+        cls = " class='row-agg'" if agg else ""
+        recuo = "" if agg else "style='padding-left:22px'"
+        cells = [f"<td {recuo}>{prazo}</td>"]
+        for c, _ in colunas:
+            tinta = "" if (agg or c not in tintas) else _heat_style(row.get(c), escalas[c])
+            cells.append(f"<td class='num'{tinta}>{_fmt(row.get(c), 0)}</td>")
+        linhas.append(f"<tr{cls}>" + "".join(cells) + "</tr>")
+
+    cabecalho = "".join(f"<th>{rot}</th>" for _, rot in colunas)
+    return f"""
+    <div class="table-title">{titulo}</div>
+    <div class="table-subtitle">{subtitulo}
+    <br>Fundo <span class="heat-key heat-key-compra">verde</span> = compra de USD, <span class="heat-key heat-key-venda">vermelho</span> = venda; intensidade proporcional ao maior |valor| entre os prazos da coluna</div>
+    <table class="data-table">
+        <thead><tr><th>Prazo</th>{cabecalho}</tr></thead>
+        <tbody>{"".join(linhas)}</tbody>
+    </table>
+    """

@@ -244,3 +244,66 @@ SECTOR_ROLLING_DEFAULT_VIEW = 120
 # aba, que custam 1/5 por pregao; um rolante de 5 pregoes aberto em seis anos e
 # borrao de todo jeito.
 SECTOR_ROLLING_HISTORY = 250
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Offshore por prazo: NDF USD-CLP de bancos residentes com no residentes
+# ──────────────────────────────────────────────────────────────────────
+# Duas familias irmas do mesmo quadro do BDE, uma de estoque e uma de fluxo:
+#   STO -> DER_BD_PPC_03, montos VIGENTES netos  (posicao viva)
+#   FLU -> DER_BD_SPC_03, montos TRANSADOS netos (novas operacoes do dia)
+#
+# As duas sao por PLAZO CONTRACTUAL (slot 12 do id = "C"; "R", residual, existe
+# em outras tabelas do BDE mas nao nesta). Isso importa: sem prazo residual nao
+# ha migracao de balde, entao um contrato fica no balde em que nasceu ate vencer
+# e os baldes do estoque e do fluxo sao a MESMA coisa, comparaveis um a um.
+#
+# O que NAO se segue disso e que o delta do estoque feche a soma do fluxo: o
+# fluxo so soma, o vencimento so subtrai e nunca aparece no fluxo. A identidade
+# e `delta estoque_i = fluxo_i - vencimentos_i`, e medida na amostra o gap e
+# grande (jun/22 a set/26: delta de -17.749 contra fluxo de -66.441 mm USD).
+# Por isso a aba mostra as duas coisas, e nao uma como proxy da outra.
+OFFSHORE_PRAZO_BALDES = ["P17", "P835", "P3695", "P96185", "P186370", "MA01"]
+
+OFFSHORE_PRAZO_NOMES = {
+    "P17":     "Até 7 dias",
+    "P835":    "8 a 35 dias",
+    "P3695":   "36 a 95 dias",
+    "P96185":  "96 a 185 dias",
+    "P186370": "186 a 370 dias",
+    "MA01":    "Mais de 1 ano",
+}
+
+
+def _serie_prazo(tipo: str, balde: str) -> str:
+    """Id de serie do BDE para um balde de prazo. `tipo`: STO (estoque) ou FLU (fluxo)."""
+    return f"F099.DER.{tipo}.Z.40.N.NR.NET.NDF.MMUSD.CLPUSD.C.{balde}.0.D"
+
+
+SERIES_OFFSHORE_PRAZO = {
+    "estoque": {b: _serie_prazo("STO", b) for b in OFFSHORE_PRAZO_BALDES},
+    "fluxo":   {b: _serie_prazo("FLU", b) for b in OFFSHORE_PRAZO_BALDES},
+}
+
+# Agregacao em tres grupos. Os cortes caem onde o mercado ja negocia: ate 35 dias
+# pega o roll e o tenor de 1 mes; 36 a 185 pega 2M, 3M e 6M, que e o miolo
+# especulativo; 186 para cima pega 9M, 1 ano e o que passa disso.
+OFFSHORE_PRAZO_GRUPOS = {
+    "Curtíssimo (até 35d)":  ["P17", "P835"],
+    "Médio (36 a 185d)":     ["P3695", "P96185"],
+    "Longo (186d ou mais)":  ["P186370", "MA01"],
+}
+
+# Nome da coluna de total. Tem de comecar com "TOTAL" — e assim que
+# make_sector_weekly_stacked separa a linha preta das fatias empilhadas.
+OFFSHORE_PRAZO_TOTAL = "TOTAL (todos os prazos)"
+
+# Janelas dos quatro empilhados de fluxo, em pregoes.
+OFFSHORE_PRAZO_FLUXO_SESSOES = [5, 21]
+
+# Delta da tabela de estoque, em pregoes.
+OFFSHORE_PRAZO_DELTA_SESSOES = 5
+
+# Observacoes na janela inicial do eixo x; o zoom-out abre o resto da amostra,
+# que comeca em BCENTRAL_FIRSTDATE (jun/2022) e nao e truncada nesta aba.
+OFFSHORE_PRAZO_DEFAULT_VIEW = 120
