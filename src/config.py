@@ -304,6 +304,23 @@ OFFSHORE_PRAZO_FLUXO_SESSOES = [5, 21]
 # Delta da tabela de estoque, em pregoes.
 OFFSHORE_PRAZO_DELTA_SESSOES = 5
 
-# Observacoes na janela inicial do eixo x; o zoom-out abre o resto da amostra,
-# que comeca em BCENTRAL_FIRSTDATE (jun/2022) e nao e truncada nesta aba.
-OFFSHORE_PRAZO_DEFAULT_VIEW = 120
+# Historico dos seis empilhados, em PREGOES. E orcamento de render e nao recorte
+# editorial: Plotly em SVG emite um retangulo por pregao POR BALDE e desenha
+# todos, inclusive os fora da janela inicial do eixo x — o `range` recorta a
+# vista, nao o DOM. Ver o cabecalho de tests/test_peso_da_pagina.py.
+#
+# Sao 27 retangulos por pregao na aba (3 figuras de 6 baldes + 3 de 3 grupos),
+# entao 190 pregoes custam 5.130. Area sairia de graca, mas nao serve aqui: os
+# baldes tem sinal misto e area empilhada do Plotly nao lida bem com isso — foi
+# o que desfez o commit 9fb6099 na aba de setores.
+#
+# 190 pregoes alcancam dez/2025, a mesma ancora de OFFSHORE_ADJ_CUTOVER (o 1o
+# dia util apos o 2o turno). Contado em pregao e nao fixado na data de proposito:
+# ancora fixa faria o custo crescer ~6.750 retangulos por ano e estourar o teto
+# da pagina sozinha, sem ninguem ter feito nada.
+OFFSHORE_PRAZO_HISTORICO = 190
+
+# A janela inicial e o historico inteiro: a aba abre ja mostrando dez/2025 ate
+# hoje. O zoom-out nao devolve mais do que isso, porque mais do que isso nao
+# esta no DOM.
+OFFSHORE_PRAZO_DEFAULT_VIEW = OFFSHORE_PRAZO_HISTORICO

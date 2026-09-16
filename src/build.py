@@ -19,6 +19,7 @@ from config import (
     SECTOR_ROLLING_SESSIONS, SECTOR_ROLLING_DEFAULT_VIEW,
     SECTOR_ROLLING_HISTORY,
     OFFSHORE_PRAZO_DEFAULT_VIEW, OFFSHORE_PRAZO_DELTA_SESSOES,
+    OFFSHORE_PRAZO_HISTORICO,
     OFFSHORE_PRAZO_FLUXO_SESSOES,
 )
 from data_processor import (
@@ -363,8 +364,10 @@ def build_offshore_prazo_section():
         ("prazo_estoque", estoque, "seis baldes do BCCh"),
         ("prazo_estoque_agg", agrega_prazo(estoque), "três grupos"),
     ]:
+        # tail DEPOIS da agregacao e do rolante, nunca antes: cortar a entrada
+        # mutilaria a janela movel. Ver OFFSHORE_PRAZO_HISTORICO.
         ctx[chave] = make_sector_weekly_stacked(
-            df.rename_axis("Data").reset_index(),
+            df.tail(OFFSHORE_PRAZO_HISTORICO).rename_axis("Data").reset_index(),
             f"ESTOQUE: saldo vivo de NDF do offshore por prazo — {cores_nota}, "
             "empilhado, linha = total",
             weeks_default=OFFSHORE_PRAZO_DEFAULT_VIEW, date_col="Data",
@@ -394,7 +397,7 @@ def build_offshore_prazo_section():
             ("_agg", agrega_prazo(roll), "três grupos"),
         ]:
             ctx[f"prazo_fluxo{sessoes}{sufixo}"] = make_sector_weekly_stacked(
-                df.rename_axis("Data").reset_index(),
+                df.tail(OFFSHORE_PRAZO_HISTORICO).rename_axis("Data").reset_index(),
                 f"FLUXO: NDF novo contratado, acumulado de {sessoes} pregões "
                 f"(rolante) — {nota}, empilhado, linha = total",
                 weeks_default=OFFSHORE_PRAZO_DEFAULT_VIEW, date_col="Data",

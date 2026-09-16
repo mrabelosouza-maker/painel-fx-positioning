@@ -29,11 +29,16 @@ PAGINA = RAIZ / "docs" / "index.html"
 # atual: pior figura ~2.100.
 MAX_RECTS_POR_FIGURA = 3_000
 
-# O da pagina e frouxo de proposito. Medida atual ~27.500, e o numero cresce
+# O da pagina e frouxo de proposito. Medida atual ~32.800, e o numero cresce
 # sozinho: os empilhados semanais nao tem corte de historico, entao ganham ~52
 # barras por serie por ano (~360/ano na aba de setores). Um teto justo aqui
 # quebraria pelo tempo passar, sem ninguem ter feito nada errado.
-MAX_RECTS_NA_PAGINA = 32_000
+#
+# Subiu de 32.000 para 34.000 ao entrar a aba Offshore por Prazo, que traz 27
+# retangulos por pregao (3 figuras de 6 baldes + 3 de 3 grupos) em 190 pregoes,
+# = 5.130. O teto POR FIGURA, que e a guarda que pega a marca errada, ficou
+# intacto e com folga: a pior figura da aba nova emite 1.140 de 3.000.
+MAX_RECTS_NA_PAGINA = 34_000
 BARRA = chr(92)
 
 
