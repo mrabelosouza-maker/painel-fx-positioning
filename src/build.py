@@ -18,6 +18,9 @@ from config import (
     SECTOR_WINDOWS, OFFSHORE_ADJ_DEFAULT_START,
     SECTOR_ROLLING_SESSIONS, SECTOR_ROLLING_DEFAULT_VIEW,
     SECTOR_ROLLING_HISTORY,
+    OFFSHORE_PRAZO_DEFAULT_VIEW, OFFSHORE_PRAZO_DELTA_SESSOES,
+    OFFSHORE_PRAZO_HISTORICO,
+    OFFSHORE_PRAZO_FLUXO_SESSOES,
 )
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
@@ -27,6 +30,8 @@ from data_processor import (
     build_sector_rolling,
     build_afp_spot_flow, build_afp_5d_legs, build_afp_weekly_legs,
     build_afp_rolling_legs, build_afp_levels,
+    build_offshore_prazo, agrega_prazo, build_prazo_rolling,
+    build_prazo_tabela_estoque, build_prazo_tabela_fluxo,
 )
 from chart_builder import (
     make_line_chart,
@@ -45,10 +50,11 @@ from chart_builder import (
     make_afp_daily_bars,
     make_afp_level_line,
     make_afp_levels_chart,
+    PRAZO_CORES,
 )
 from table_builder import (
     make_summary_table, make_swap_delta_table, make_afp_legs_table,
-    make_sector_flow_table,
+    make_sector_flow_table, make_prazo_table,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -313,6 +319,110 @@ def build_offshore_adj_section(dados):
     return ctx
 
 
+def build_offshore_prazo_section():
+    """Aba Offshore por Prazo: NDF USD-CLP do offshore aberto por balde de prazo.
+
+    Duas leituras que NAO sao a mesma vista de dois jeitos:
+
+      - estoque (montos vigentes): a posicao viva hoje, por prazo;
+      - fluxo   (montos transados): operacao nova fechada no dia, por prazo.
+
+    O elo entre elas e `delta estoque_i = fluxo_i - vencimentos_i`. O fluxo so
+    soma; o vencimento so tira do estoque e nunca aparece no fluxo. Medido na
+    amostra (jun/22 a set/26), o estoque caiu 17.749 mm USD contra um fluxo
+    somado de -66.441: o resto venceu. Por isso as duas metades da aba.
+
+    Cuidado de leitura, e por isso a nota no corpo: esta aba e NDF e so o par
+    USD-CLP; a aba Offshore usa a serie ampla (instrumento Z, par MLME), que
+    inclui forward com entrega, swaps de moneda e as outras paridades. As duas
+    andam juntas (corr +0,96) mas nunca coincidem — o gap medio e de 4.732 mm
+    USD e hoje esta em 877.
+
+    Toda a aba em compra-de-USD, como as de Fundos de Pensao, Offshore e Todos
+    os Setores: positivo = offshore comprando USD.
+    """
+    ctx = {}
+    dados = build_offshore_prazo()
+    estoque, fluxo = dados["estoque"], dados["fluxo"]
+
+    if estoque.empty or fluxo.empty:
+        indisp = "<p>NDF do offshore por prazo indisponível</p>"
+        return {
+            "prazo_estoque": indisp, "prazo_estoque_agg": indisp,
+            "prazo_estoque_table": "<p>—</p>", "prazo_estoque_agg_table": "<p>—</p>",
+            **{f"prazo_fluxo{s}": indisp for s in OFFSHORE_PRAZO_FLUXO_SESSOES},
+            **{f"prazo_fluxo{s}_agg": indisp for s in OFFSHORE_PRAZO_FLUXO_SESSOES},
+            **{f"prazo_fluxo{s}_table": "<p>—</p>" for s in OFFSHORE_PRAZO_FLUXO_SESSOES},
+            **{f"prazo_fluxo{s}_agg_table": "<p>—</p>" for s in OFFSHORE_PRAZO_FLUXO_SESSOES},
+        }
+
+    # ── Estoque: detalhado e agregado ──
+    # Empilhado e nao linhas pelo mesmo motivo da aba de setores: a pergunta e de
+    # composicao — em que prazo esta a posicao — e seis linhas cruzando zero nao
+    # mostram isso. A linha preta do total e a soma das proprias fatias.
+    for chave, df, cores_nota in [
+        ("prazo_estoque", estoque, "seis baldes do BCCh"),
+        ("prazo_estoque_agg", agrega_prazo(estoque), "três grupos"),
+    ]:
+        # tail DEPOIS da agregacao e do rolante, nunca antes: cortar a entrada
+        # mutilaria a janela movel. Ver OFFSHORE_PRAZO_HISTORICO.
+        ctx[chave] = make_sector_weekly_stacked(
+            df.tail(OFFSHORE_PRAZO_HISTORICO).rename_axis("Data").reset_index(),
+            f"ESTOQUE: saldo vivo de NDF do offshore por prazo — {cores_nota}, "
+            "empilhado, linha = total",
+            weeks_default=OFFSHORE_PRAZO_DEFAULT_VIEW, date_col="Data",
+            cores=PRAZO_CORES,
+        )
+
+    tab, fim = build_prazo_tabela_estoque(estoque)
+    tab_agg, _ = build_prazo_tabela_estoque(agrega_prazo(estoque))
+    for chave, t in [("prazo_estoque_table", tab), ("prazo_estoque_agg_table", tab_agg)]:
+        data = fim.strftime("%d/%m/%Y") if fim is not None else "—"
+        ctx[chave] = make_prazo_table(
+            t,
+            f"ESTOQUE &mdash; saldo de NDF por prazo (mm USD, + compra de USD)",
+            f"Posição em {data} &middot; &Delta; = variação do saldo em "
+            f"{OFFSHORE_PRAZO_DELTA_SESSOES} pregões, ponta a ponta",
+            [("nivel", "Saldo"), ("delta", f"&Delta; {OFFSHORE_PRAZO_DELTA_SESSOES}P")],
+            tintas={"delta"},
+        )
+
+    # ── Fluxo: acumulado rolante de 5 e 21 pregoes, detalhado e agregado ──
+    # Rolante e nao fechando na sexta: barras consecutivas compartilham pregoes,
+    # entao lem-se como NIVEL de fluxo novo e nao como barras independentes.
+    for sessoes in OFFSHORE_PRAZO_FLUXO_SESSOES:
+        roll = build_prazo_rolling(fluxo, sessoes)
+        for sufixo, df, nota in [
+            ("", roll, "seis baldes do BCCh"),
+            ("_agg", agrega_prazo(roll), "três grupos"),
+        ]:
+            ctx[f"prazo_fluxo{sessoes}{sufixo}"] = make_sector_weekly_stacked(
+                df.tail(OFFSHORE_PRAZO_HISTORICO).rename_axis("Data").reset_index(),
+                f"FLUXO: NDF novo contratado, acumulado de {sessoes} pregões "
+                f"(rolante) — {nota}, empilhado, linha = total",
+                weeks_default=OFFSHORE_PRAZO_DEFAULT_VIEW, date_col="Data",
+                cores=PRAZO_CORES,
+            )
+
+        t, inicio, fim_j = build_prazo_tabela_fluxo(fluxo, sessoes)
+        t_agg, _, _ = build_prazo_tabela_fluxo(agrega_prazo(fluxo), sessoes)
+        janela = (
+            f"{inicio.strftime('%d/%m')} a {fim_j.strftime('%d/%m/%Y')}"
+            if inicio is not None else "—"
+        )
+        for sufixo, tt in [("", t), ("_agg", t_agg)]:
+            ctx[f"prazo_fluxo{sessoes}{sufixo}_table"] = make_prazo_table(
+                tt,
+                f"FLUXO {sessoes} PREGÕES &mdash; NDF novo por prazo (mm USD, + compra de USD)",
+                f"Janela {janela} &middot; &quot;anterior&quot; = os "
+                f"{sessoes} pregões imediatamente antes, para dizer se o ritmo mudou",
+                [("fluxo", f"Acum. {sessoes}P"), ("anterior", "Anterior")],
+                tintas={"fluxo", "anterior"},
+            )
+
+    return ctx
+
+
 def build_afp_flow_section(afp_df, wk):
     """Gera charts e table da aba Fluxo AFP: NDF + Spot.
 
@@ -524,6 +634,7 @@ def main():
     context.update(build_fx_section(dados))
     context.update(build_afp_flow_section(afp_df, afp_wk))
     context.update(build_offshore_adj_section(dados))
+    context.update(build_offshore_prazo_section())
     context.update(build_sectors_section(dados))
     context.update(build_swap_section(swap_data))
     context.update(build_colombia_section(col_data))

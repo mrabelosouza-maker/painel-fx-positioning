@@ -450,6 +450,7 @@ window.JGPLazy = (function () {
   <button class="tabbtn" data-tab="afpflow">Fluxo AFP</button>
   <button class="tabbtn" data-tab="offshore">Offshore</button>
   <button class="tabbtn" data-tab="offadj">Offshore Ajustado</button>
+  <button class="tabbtn" data-tab="offprazo">Offshore por Prazo</button>
   <button class="tabbtn" data-tab="corporate">Corporate</button>
   <button class="tabbtn" data-tab="banks">Bancos</button>
   <button class="tabbtn" data-tab="pensoff">Fundos + Offshore</button>
@@ -584,6 +585,77 @@ window.JGPLazy = (function () {
     </div>
 
     <!-- ══════════════════ CORPORATE ══════════════════ -->
+    <div id="tab-offprazo" class="tab">
+      <div class="note">
+        <b>Qual dado é este.</b> NDF (<i>forward por compensación</i>) do <b>par USD-CLP</b>,
+        de bancos residentes com <b>não residentes</b>, aberto por <b>prazo contratual</b>.
+        Quadros <code>DER_BD_PPC_03</code> (estoque) e <code>DER_BD_SPC_03</code> (fluxo) do BDE,
+        em milhões de dólares, diário.
+        <br>
+        <b>Não é a mesma série da aba Offshore.</b> Aquela usa o agregado amplo (instrumento
+        <code>Z</code>, par <code>MLME</code>), que inclui forward com entrega, swaps de moneda e as
+        demais paridades. As duas andam juntas (correlação +0,96) mas nunca coincidem: o gap médio
+        é de 4.732 mm USD e hoje está em 877.
+        <br>
+        <b>Dado preliminar.</b> A série diária é referencial; o definitivo sai mensal no dia 23 do
+        mês seguinte, com revisão de três meses e 23 dias. A cauda pode mudar.
+      </div>
+
+      <h2>Estoque: onde está a posição</h2>
+      <p class="sub">Convenção de <b>compra de USD</b>: acima de zero o offshore está comprado em USD
+        (vendido em CLP), abaixo está vendido. O empilhado responde à pergunta de <b>composição</b>
+        &mdash; em que prazo a posição está &mdash; e a linha preta é a soma das próprias fatias.
+        <br>
+        Como o prazo é <b>contratual</b> e não residual, um contrato fica no balde em que nasceu até
+        vencer: o balde não conta quanto falta para o vencimento, conta com que prazo a operação foi
+        fechada.</p>
+      <div class="grid-wide">
+        <div class="card">{{ prazo_estoque | safe }}</div>
+        <div class="card">{{ prazo_estoque_table | safe }}</div>
+      </div>
+      <div class="grid-wide">
+        <div class="card">{{ prazo_estoque_agg | safe }}</div>
+        <div class="card">{{ prazo_estoque_agg_table | safe }}</div>
+      </div>
+
+      <h2>Fluxo: o que foi contratado de novo</h2>
+      <p class="sub">Montos <b>transados</b> líquidos: operação nova fechada no dia, acumulada em
+        janela rolante de 5 e de 21 <b>pregões</b>. Barras consecutivas compartilham pregões, então
+        leia como <b>nível de fluxo novo</b> e não como barras independentes.
+        <br>
+        O fluxo só soma; o vencimento só tira do estoque e nunca aparece aqui. Por isso
+        <b>Δ estoque ≠ soma do fluxo</b>: a identidade é
+        <code>Δ estoque = fluxo &minus; vencimentos</code>, e a diferença é justamente o que venceu.
+        De jun/22 até hoje o estoque caiu 17.749 mm USD contra um fluxo somado de &minus;66.441.</p>
+      <div class="grid-wide">
+        <div class="card">{{ prazo_fluxo5 | safe }}</div>
+        <div class="card">{{ prazo_fluxo5_table | safe }}</div>
+      </div>
+      <div class="grid-wide">
+        <div class="card">{{ prazo_fluxo5_agg | safe }}</div>
+        <div class="card">{{ prazo_fluxo5_agg_table | safe }}</div>
+      </div>
+      <div class="grid-wide">
+        <div class="card">{{ prazo_fluxo21 | safe }}</div>
+        <div class="card">{{ prazo_fluxo21_table | safe }}</div>
+      </div>
+      <div class="grid-wide">
+        <div class="card">{{ prazo_fluxo21_agg | safe }}</div>
+        <div class="card">{{ prazo_fluxo21_agg_table | safe }}</div>
+      </div>
+
+      <div class="note">
+        <b>Como ler os prazos.</b> Os cortes do BCCh caem onde o mercado negocia: <b>até 7 dias</b> é
+        roll e overnight, <b>8 a 35</b> pega o tenor de 1 mês, <b>36 a 95</b> pega 2M e 3M (o miolo
+        especulativo), <b>96 a 185</b> pega 6M, <b>186 a 370</b> pega 9M e 1 ano. A agregação em três
+        grupos junta esses pares.
+        <br>
+        O desmonte antecipado entra no fluxo como operação nova de <b>sinal oposto</b>, com prazo
+        contratual igual ao que faltava do contrato velho. Isso contamina sobretudo o balde de até 7
+        dias, que é onde o roll aparece &mdash; leia-o como medida de giro, não de posicionamento novo.
+      </div>
+    </div>
+
     <div id="tab-corporate" class="tab">
       <h2>Posição e resumo</h2>
       <p class="sub">Sinal cru do BCCh: acima de zero = compra de CLP (venda de USD).</p>

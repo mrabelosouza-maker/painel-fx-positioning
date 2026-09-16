@@ -3,6 +3,12 @@ import numpy as np
 import pandas as pd
 
 from config import (
+    OFFSHORE_PRAZO_BALDES,
+    OFFSHORE_PRAZO_DELTA_SESSOES,
+    OFFSHORE_PRAZO_GRUPOS,
+    OFFSHORE_PRAZO_NOMES,
+    OFFSHORE_PRAZO_TOTAL,
+    SERIES_OFFSHORE_PRAZO,
     SECTOR_CHART_LINES,
     SECTOR_NET_LINE,
     SECTOR_SPOT_SERIES,
@@ -825,3 +831,130 @@ def build_sector_rolling(
     # janela em que falta um setor nao virar total menor sem aviso.
     roll[SECTOR_NET_LINE] = roll.sum(axis=1, min_count=len(cols))
     return roll.dropna(how="all").rename_axis("Data").reset_index()
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Offshore por prazo
+# ──────────────────────────────────────────────────────────────────────
+def _fetch_prazo(tipo: str) -> pd.DataFrame:
+    """Uma familia de prazos (estoque ou fluxo) em formato largo, em compra-de-USD.
+
+    Colunas com os nomes legiveis dos baldes, indice de Data. Inverte o sinal: o
+    BCCh publica na otica do banco residente (positivo = banco compra USD do
+    offshore = offshore VENDE USD), e a aba inteira fala do offshore, entao
+    positivo passa a ser compra de USD pelo offshore.
+
+    Sai so pregao: a serie vem em dia corrido com NaN no fim de semana e feriado,
+    e uma linha vazia no meio da janela rolante consumiria uma sessao.
+    """
+    codes = SERIES_OFFSHORE_PRAZO[tipo]
+    baldes = list(OFFSHORE_PRAZO_BALDES)
+    matrix = fetch_bcentral_matrix([codes[b] for b in baldes])
+    if matrix.empty:
+        return pd.DataFrame()
+
+    matrix["Data"] = pd.to_datetime(matrix["date_str"], dayfirst=True, errors="coerce")
+    df = matrix.dropna(subset=["Data"]).set_index("Data").sort_index()
+    df = df[[f"V{i}" for i in range(len(baldes))]]
+    df.columns = [OFFSHORE_PRAZO_NOMES[b] for b in baldes]
+    return -df.dropna(how="all")
+
+
+def _com_total(df: pd.DataFrame) -> pd.DataFrame:
+    """Acrescenta a coluna de total, somada das proprias fatias do grafico.
+
+    Somada e nao a serie de total publicada pelo BCCh, como no empilhado de
+    setores: assim a linha preta e por construcao o que se ve somando as barras.
+    As duas batem exatamente (max|dif| = 0,0000 na amostra inteira), entao nao se
+    perde nada em usar a soma.
+    """
+    if df.empty:
+        return df
+    out = df.copy()
+    out[OFFSHORE_PRAZO_TOTAL] = out.sum(axis=1, min_count=len(df.columns))
+    return out
+
+
+def build_offshore_prazo() -> dict:
+    """Estoque e fluxo de NDF do offshore por balde de prazo, em compra-de-USD.
+
+    Devolve {"estoque": df, "fluxo": df}, ambos largos e indexados por Data, ja
+    com a coluna de total. Estoque e posicao viva (montos vigentes); fluxo e
+    operacao nova do dia (montos transados). Ver o comentario de
+    SERIES_OFFSHORE_PRAZO: nao sao a mesma coisa vista de dois jeitos, porque o
+    vencimento entra no estoque e nao no fluxo.
+    """
+    return {tipo: _com_total(_fetch_prazo(tipo)) for tipo in ("estoque", "fluxo")}
+
+
+def agrega_prazo(df: pd.DataFrame) -> pd.DataFrame:
+    """Colapsa os seis baldes nos tres grupos de OFFSHORE_PRAZO_GRUPOS.
+
+    A coluna de total sai somada dos grupos, que sao uma particao dos seis
+    baldes — logo da o mesmo numero do total dos baldes.
+    """
+    if df.empty:
+        return df
+    out = pd.DataFrame(index=df.index)
+    for grupo, baldes in OFFSHORE_PRAZO_GRUPOS.items():
+        cols = [OFFSHORE_PRAZO_NOMES[b] for b in baldes if OFFSHORE_PRAZO_NOMES[b] in df.columns]
+        if cols:
+            out[grupo] = df[cols].sum(axis=1, min_count=len(cols))
+    return _com_total(out)
+
+
+def build_prazo_rolling(fluxo: pd.DataFrame, sessoes: int) -> pd.DataFrame:
+    """Soma movel de `sessoes` pregoes do fluxo, por balde.
+
+    Janela em PREGOES e nao em dias corridos, como o resto do painel: a serie ja
+    vem sem fim de semana de `_fetch_prazo`, entao contar linha conta sessao.
+    min_periods=sessoes para janela incompleta nao virar barra parcial.
+
+    O total e recomposto depois da soma movel, e nao rolado junto: rolar a coluna
+    de total ja existente daria o mesmo numero, mas deixaria a linha preta
+    dependendo de uma coluna que o grafico nao desenha.
+    """
+    if fluxo.empty:
+        return fluxo
+    fatias = [c for c in fluxo.columns if c != OFFSHORE_PRAZO_TOTAL]
+    roll = fluxo[fatias].rolling(sessoes, min_periods=sessoes).sum()
+    return _com_total(roll).dropna(how="all")
+
+
+def build_prazo_tabela_estoque(estoque: pd.DataFrame) -> tuple[pd.DataFrame, pd.Timestamp]:
+    """Nivel do ultimo pregao e delta de N pregoes, por balde.
+
+    O delta e de ponta a ponta do estoque (nivel de hoje menos o de N sessoes
+    atras), nao a soma do fluxo da janela: as duas coisas diferem pelo que
+    venceu, e esta tabela acompanha o grafico de estoque.
+    """
+    if estoque.empty:
+        return pd.DataFrame(), None
+    n = OFFSHORE_PRAZO_DELTA_SESSOES
+    if len(estoque) <= n:
+        return pd.DataFrame(), None
+    fim = estoque.index[-1]
+    tab = pd.DataFrame({
+        "nivel": estoque.iloc[-1],
+        "delta": estoque.iloc[-1] - estoque.iloc[-1 - n],
+    })
+    return tab, fim
+
+
+def build_prazo_tabela_fluxo(
+    fluxo: pd.DataFrame, sessoes: int
+) -> tuple[pd.DataFrame, pd.Timestamp, pd.Timestamp]:
+    """Fluxo acumulado nos ultimos `sessoes` pregoes, por balde, e a janela.
+
+    Traz tambem o acumulado da janela anterior, do mesmo tamanho, para a tabela
+    dizer se o ritmo acelerou ou nao — o numero sozinho nao diz.
+    """
+    if fluxo.empty or len(fluxo) < sessoes:
+        return pd.DataFrame(), None, None
+    janela = fluxo.iloc[-sessoes:]
+    tab = pd.DataFrame({"fluxo": janela.sum(min_count=sessoes)})
+    if len(fluxo) >= 2 * sessoes:
+        tab["anterior"] = fluxo.iloc[-2 * sessoes:-sessoes].sum(min_count=sessoes)
+    else:
+        tab["anterior"] = np.nan
+    return tab, janela.index[0], janela.index[-1]

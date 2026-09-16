@@ -833,10 +833,30 @@ SECTOR_LINE_COLORS = {
 # entao isto nao mistura cor: so clareia cada fatia contra o papel.
 SECTOR_BAR_OPACITY = 0.8
 
+# Prazo e categoria ORDENADA, entao rampa sequencial e nao paleta categorica: a
+# ordem do balde tem de se ler na cor, do claro (curto) ao escuro (longo), sem
+# precisar da legenda. Rampa azul de proposito — verde e vermelho ja significam
+# compra e venda nas tabelas desta aba, e reusa-los aqui competiria com isso.
+PRAZO_CORES = {
+    "Até 7 dias":      "#C6DBEF",
+    "8 a 35 dias":     "#9ECAE1",
+    "36 a 95 dias":    "#6BAED6",
+    "96 a 185 dias":   "#4292C6",
+    "186 a 370 dias":  "#2171B5",
+    "Mais de 1 ano":   "#08306B",
+    # Os tres grupos pegam pontos bem separados da MESMA rampa, entao o grafico
+    # agregado se le como uma versao grossa do detalhado, e nao como outro mapa.
+    "Curtíssimo (até 35d)": "#9ECAE1",
+    "Médio (36 a 185d)":    "#4292C6",
+    "Longo (186d ou mais)": "#08306B",
+    "TOTAL (todos os prazos)": "#111827",
+}
+
 
 def make_sector_weekly_stacked(
     wk: pd.DataFrame, title: str, weeks_default: int = 26,
-    date_col: str = "Semana",
+    date_col: str = "Semana", cores: dict | None = None,
+    yaxis_title: str = "USD million (+ compra de USD)",
 ) -> str:
     """Net semanal empilhado por setor, em compra-de-USD.
 
@@ -852,6 +872,11 @@ def make_sector_weekly_stacked(
     `date_col`: "Semana" para o agregado semanal, "Data" para as versoes diarias
     rolantes. Com "Data" o `weeks_default` passa a contar observacoes, nao
     semanas — mesma convencao de `make_weekly_legs_bars`.
+
+    `cores`: mapa coluna -> cor. O padrao e a paleta de setores; a aba de
+    offshore por prazo passa PRAZO_CORES. O desenho e o mesmo nos dois casos —
+    composicao com sinal dos dois lados e linha de total —, entao vale a mesma
+    funcao, e so a chave da cor muda.
     """
     if wk.empty or len(wk.columns) < 2:
         return "<p>Dados indisponíveis</p>"
@@ -866,7 +891,7 @@ def make_sector_weekly_stacked(
         fig.add_trace(go.Bar(
             x=x_str, y=wk[col], name=col,
             marker=dict(
-                color=SECTOR_LINE_COLORS.get(col),
+                color=(cores or SECTOR_LINE_COLORS).get(col),
                 opacity=SECTOR_BAR_OPACITY,
                 # Fio branco entre segmentos: separa as fatias sem depender do
                 # contraste entre as cores vizinhas. Com a paleta suave isto
@@ -889,7 +914,7 @@ def make_sector_weekly_stacked(
         title=title, barmode="relative", bargap=0.2,
         template="jgp", height=560,
         margin=dict(l=60, r=20, t=64, b=170),
-        yaxis_title="USD million (+ compra de USD)",
+        yaxis_title=yaxis_title,
         # A legenda tem oito entradas e quebra em duas linhas. Empurrada para
         # baixo dos rotulos de data, com margem inferior que cabe as duas coisas.
         legend=dict(orientation="h", yanchor="top", y=-0.30, xanchor="left", x=0),
