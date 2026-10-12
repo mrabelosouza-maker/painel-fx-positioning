@@ -1054,6 +1054,7 @@ HAC_ALERTA = JGP_VERMELHO
 HAC_BANDA = "rgba(127,127,127,0.13)"
 HAC_INK = "#1F1F1F"
 HAC_ZERO = "#9E9E9E"
+_DIA_SEM = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
 _HAC_CFG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d"],
             "responsive": True}
 
@@ -1115,60 +1116,110 @@ def _hac_ref(fig: go.Figure, y: float, texto: str, cor: str, dash: str, pos: str
                   annotation_font=dict(size=10, color=cor))
 
 
-def make_hacienda_diario(
-    d: pd.DataFrame, col: str, limiar: float, rotulo_limiar: str,
-    destaque_desde: pd.Timestamp | None = None, height: int = 380,
-) -> str:
-    """Barras diarias de uma perna de otros: cinza o que a regua sem Hacienda
-    produz o tempo todo, vermelho o que ela produz um dia em vinte. O limiar e
-    o p5 (cauda vendedora): vermelho = venda de USD abaixo dele."""
+def _hac_faixa(fig: go.Figure, lo: float, hi: float, texto: str) -> None:
+    """Faixa 'normal sem Hacienda' (p5-p95) sombreada, presa ao eixo y."""
+    fig.add_shape(type="rect", xref="paper", x0=0, x1=1, yref="y", y0=lo, y1=hi,
+                  fillcolor=HAC_BANDA, line_width=0, layer="below")
+    fig.add_annotation(xref="paper", x=0.004, y=hi, yref="y", text=texto,
+                       showarrow=False, xanchor="left", yanchor="bottom",
+                       bgcolor="rgba(255,255,255,0.8)", borderpad=2,
+                       font=dict(size=10, color="#6B6B6B"))
+
+
+def _hac_categoria(fig: go.Figure, x: list[str], tickvals: list[str]) -> None:
+    fig.update_xaxes(type="category", tickvals=tickvals, ticktext=tickvals,
+                     tickangle=0, rangebreaks=None)
+
+
+def make_hacienda_pregoes(d: pd.DataFrame, regua: dict, n_view: int = 30,
+                          height: int = 400) -> str:
+    """Neto de otros, pregao a pregao, aberto nas ultimas ~6 semanas.
+
+    Enfase e nao categorico: a pergunta e uma so ("estao vendendo agora?"),
+    entao o normal fica cinza dentro da faixa e so o dia na cauda vendedora
+    ganha cor. Eixo categorico de pregoes (sem buraco de fim de semana ou
+    feriado), com divisoria fina por semana e o tick na segunda. O historico
+    inteiro (HACIENDA_HIST_DIARIO) esta no DOM: zoom-out o devolve.
+    """
     if d.empty:
         return "<p>Dados indisponíveis</p>"
-    acima = d[col] < limiar
+    x = [t.strftime("%d/%m") for t in d.index]
+    dia = [_DIA_SEM[t.dayofweek] for t in d.index]
+    cores = [HAC_ALERTA if s else HAC_NEUTRO for s in d["sinal_neto"]]
     fig = go.Figure(go.Bar(
-        x=d.index, y=d[col], marker_color=[HAC_ALERTA if a else HAC_NEUTRO for a in acima],
-        hovertemplate="%{y:+,.0f} mm USD<extra></extra>", showlegend=False,
+        x=x, y=d["neto"], marker=dict(color=cores, cornerradius=3),
+        customdata=dia, showlegend=False,
+        hovertemplate="%{customdata} %{x}: %{y:+,.0f} mm USD<extra></extra>",
     ))
-    _hac_ref(fig, limiar, rotulo_limiar, JGP_CINZA, "dash", "bottom left")
-    if destaque_desde is not None:
-        fig.add_vrect(x0=destaque_desde - pd.Timedelta(hours=14),
-                      x1=d.index.max() + pd.Timedelta(hours=14),
-                      fillcolor=HAC_BANDA, line_width=0, layer="below",
-                      annotation_text="última semana", annotation_position="bottom right",
-                      annotation_font=dict(size=10, color=JGP_CINZA))
-    _hac_layout(fig, height, pregoes=True, bargap=0.25)
+    _hac_faixa(fig, regua["neto_p05"], regua["neto_p95"],
+               "faixa normal sem Hacienda (p5–p95 dos meses sem venda)")
+
+    semana = d.index.to_period("W-FRI")
+    inicio = [i for i in range(len(x)) if i == 0 or semana[i] != semana[i - 1]]
+    for i in inicio[1:]:
+        fig.add_vline(x=i - 0.5, line_color="#DADADA", line_width=1, layer="below")
+    # Valores escritos so nos dias de sinal da ultima semana: um numero por barra
+    # e ruido; o resto esta no hover e na tabela.
+    ult = semana == semana[-1]
+    for xi, v, s, u in zip(x, d["neto"], d["sinal_neto"], ult):
+        if s and u:
+            fig.add_annotation(x=xi, y=v, text=f"<b>{_br(v)}</b>", showarrow=False,
+                               yanchor="top", yshift=-2, font=dict(size=11, color=HAC_INK))
+    i0 = inicio[-1]
+    fig.add_annotation(x=(i0 + len(x) - 1) / 2, xref="x", y=1, yref="paper",
+                       text="semana atual", showarrow=False, yanchor="bottom",
+                       font=dict(size=10, color="#6B6B6B"))
+
+    n = len(x)
+    vis = d["neto"].iloc[-n_view:]
+    lo = min(vis.min(), regua["neto_p05"]) * 1.3
+    hi = max(vis.max(), regua["neto_p95"]) * 1.3
+    _hac_layout(fig, height, eixo_data=False, bargap=0.18)
+    _hac_categoria(fig, x, [x[i] for i in inicio])
+    fig.update_xaxes(range=[n - n_view - 0.5, n - 0.5])
+    fig.update_yaxes(range=[lo, hi])
     return _hac_html(fig)
 
 
-def make_hacienda_semanal(sem: pd.DataFrame, ritmo: float, height: int = 340) -> str:
-    """Venda estimada (Itau) por semana de calendario, com o ritmo anunciado.
+def make_hacienda_semanas(sem: pd.DataFrame, regua: dict, ritmo: float,
+                          height: int = 380) -> str:
+    """Neto de otros por semana de calendario, contra a faixa semanal normal.
 
-    A ultima semana, se incompleta, sai clara e com os pregoes no rotulo: o
-    pontilhado de referencia dela e o ritmo proporcional, desenhado so ali.
+    Vermelho = semana com sinal (dois pregoes na cauda, ou a semana inteira
+    abaixo da faixa). A ultima, se incompleta, sai clara e rotulada. O ritmo
+    anunciado entra so como escala: neto de otros nao e a venda da Hacienda.
     """
     if sem.empty:
         return "<p>Dados indisponíveis</p>"
-    x = sem["fim_semana"]
-    opac = [0.45 if p else 1.0 for p in sem["parcial"]]
+    seg = sem["fim_semana"] - pd.Timedelta(days=4)
+    x = [t.strftime("%d/%m") for t in seg]
+    cores = [HAC_ALERTA if s else HAC_NEUTRO for s in sem["sinal"]]
+    opac = [0.5 if p else 1.0 for p in sem["parcial"]]
     fig = go.Figure(go.Bar(
-        x=x, y=sem["est"], marker=dict(color=HAC_ESTIMADO, opacity=opac),
-        customdata=list(zip(sem["pregoes"], sem["venda"])),
-        hovertemplate=("estimativa: %{y:+,.0f} mm USD<br>venda de otros: "
-                       "%{customdata[1]:+,.0f} · %{customdata[0]} pregões<extra></extra>"),
+        x=x, y=sem["neto"], marker=dict(color=cores, opacity=opac, cornerradius=3),
+        customdata=list(zip(sem["pregoes"], sem["sinal_neto"], sem["est"])),
         showlegend=False,
+        hovertemplate=("semana de %{x}: neto %{y:+,.0f} mm USD<br>"
+                       "%{customdata[1]} de %{customdata[0]} pregões na cauda · "
+                       "Hacienda (Itaú) %{customdata[2]:+,.0f}<extra></extra>"),
     ))
-    # `ritmo` chega negativo (venda): a linha fica abaixo do zero, junto das barras.
+    _hac_faixa(fig, regua["sem_p05"], regua["sem_p95"],
+               "faixa normal sem Hacienda (p5–p95 das semanas sem venda)")
     _hac_ref(fig, ritmo, f"ritmo anunciado: {_br(ritmo)} / semana",
-             HAC_ALERTA, "dot", "bottom left")
+             HAC_ALERTA, "dot", "bottom right")
     ult = sem.iloc[-1]
-    rot = f"<b>{_br(ult['est'])}</b>"
+    rot = f"<b>{_br(ult['neto'])}</b>"
     if ult["parcial"]:
-        rot += f"<br>{int(ult['pregoes'])} de 5 pregões"
-    fig.add_annotation(x=x.iloc[-1], y=ult["est"], text=rot, showarrow=False,
-                       yanchor="top", yshift=-4, font=dict(size=11, color=HAC_INK))
-    _hac_layout(fig, height, bargap=0.25)
-    fig.update_xaxes(tickformat="%d/%m")
-    fig.update_yaxes(range=[min(ritmo, sem["est"].min()) * 1.12, max(0, sem["est"].max()) * 1.2 + 1])
+        rot += f"<br>parcial · {int(ult['pregoes'])} de 5"
+    fig.add_annotation(x=x[-1], y=ult["neto"], text=rot, showarrow=False,
+                       yanchor="top" if ult["neto"] < 0 else "bottom",
+                       yshift=-3 if ult["neto"] < 0 else 3,
+                       font=dict(size=11, color=HAC_INK))
+    _hac_layout(fig, height, eixo_data=False, bargap=0.22)
+    _hac_categoria(fig, x, x[::4])
+    lo = min(sem["neto"].min(), ritmo, regua["sem_p05"]) * 1.15
+    hi = max(sem["neto"].max(), regua["sem_p95"]) * 1.25
+    fig.update_yaxes(range=[lo, hi])
     return _hac_html(fig)
 
 

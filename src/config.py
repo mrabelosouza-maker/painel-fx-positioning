@@ -375,6 +375,14 @@ HACIENDA_CALIB_INICIO = "2025-01"
 # Desde 2024 porque o volume de otros de 2022-23 era outro patamar.
 HACIENDA_REGUA_INICIO = "2024-01"
 
+# Razao do estimador: a fracao da venda de USD de otros atribuida a Hacienda.
+# Fixa nos ~25% que o Itau usa, por decisao da mesa, e nao calibrada aqui. Para
+# referencia, o build ainda mede a razao na amostra (em `calib`): ~25% e a
+# mediana dos meses com venda desde 2022, ~23% o agregado 2022+ e ~20% o
+# agregado jan/25-mai/26. Com 25% o estimador SOBRESTIMA a venda de 2025-26 em
+# ~25% (soma estimada / soma divulgada na calibracao); o subtitulo do mensal diz.
+HACIENDA_RAZAO = 0.25
+
 # Ritmo anunciado em out/2026: US$ 600 mi por semana.
 HACIENDA_RITMO_SEMANAL = 600
 
@@ -389,3 +397,5 @@ HACIENDA_HIST_DIARIO = 130
 HACIENDA_HIST_MENSAL_INICIO = HACIENDA_CALIB_INICIO
 HACIENDA_TABELA_MESES = 12
 HACIENDA_HIST_SEMANAS = 40
+# Inicio do grafico semanal: o ano corrente, ~40 barras.
+HACIENDA_HIST_SEMANAL_INICIO = "2026-01-01"

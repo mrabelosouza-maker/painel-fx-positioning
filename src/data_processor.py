@@ -10,6 +10,7 @@ from config import (
     HACIENDA_CACHE,
     HACIENDA_CALIB_INICIO,
     HACIENDA_FIRSTDATE,
+    HACIENDA_RAZAO,
     HACIENDA_REGUA_INICIO,
     HACIENDA_ULTIMO_DIVULGADO,
     HACIENDA_XLSX,
@@ -1045,9 +1046,9 @@ def build_hacienda() -> dict:
       neto   = compra + venda     (= -neto cru)
       efetivo = -venda divulgada  (a Hacienda vende: <= 0)
 
-    Estimador unico, o do Itau: venda da Hacienda = r x venda de otros, com
-    r = soma da venda divulgada / soma da venda de otros na calibracao
-    (HACIENDA_CALIB_INICIO a HACIENDA_ULTIMO_DIVULGADO). Bom para o total de um
+    Estimador unico, o do Itau: venda da Hacienda = r x venda de otros, com r
+    fixo em HACIENDA_RAZAO (~25%, o numero do Itau). A razao medida na amostra
+    fica em `calib` so como referencia. Bom para o total de um
     periodo; no dia a dia e cego, porque atribui r x venda ate em mes sem venda.
 
     Por isso a aba leva tambem a regua "sem Hacienda": a distribuicao diaria de
@@ -1074,20 +1075,22 @@ def build_hacienda() -> dict:
     )
     m["efetivo"] = efetivo.reindex(m.index)
 
-    cal = m.loc[HACIENDA_CALIB_INICIO:HACIENDA_ULTIMO_DIVULGADO].dropna(subset=["efetivo"])
-    razao = cal["efetivo"].sum() / cal["venda"].sum()
+    razao = HACIENDA_RAZAO
     m["est"] = razao * m["venda"]
+    cal = m.loc[HACIENDA_CALIB_INICIO:HACIENDA_ULTIMO_DIVULGADO].dropna(subset=["efetivo"])
 
     hist = m.dropna(subset=["efetivo"])
     com_venda = hist[hist["efetivo"] < 0]
     calib = {
         "razao": razao,
+        "razao_calibrada": cal["efetivo"].sum() / cal["venda"].sum(),
+        "vies": cal["est"].sum() / cal["efetivo"].sum() - 1 if len(cal) else float("nan"),
         "inicio": pd.Timestamp(HACIENDA_CALIB_INICIO + "-01"),
         "fim": pd.Timestamp(HACIENDA_ULTIMO_DIVULGADO + "-01"),
         "razao_hist": hist["efetivo"].sum() / hist["venda"].sum(),
         "razao_mediana": (com_venda["efetivo"] / com_venda["venda"]).median(),
         "corr": hist["efetivo"].corr(hist["venda"]),
-        "erro_dp": (cal["efetivo"] - razao * cal["venda"]).std(),
+        "erro_dp": (cal["efetivo"] - cal["est"]).std(),
     }
 
     # ── Regua sem Hacienda: a cauda VENDEDORA (p5) dos meses de venda zero
@@ -1097,6 +1100,7 @@ def build_hacienda() -> dict:
         "meses": list(zero),
         "n_dias": int(em_zero.sum()),
         "neto_p05": d.loc[em_zero, "neto"].quantile(0.05),
+        "neto_p95": d.loc[em_zero, "neto"].quantile(0.95),
         "venda_p05": d.loc[em_zero, "venda"].quantile(0.05),
     }
     d["sinal_venda"] = d["venda"] < regua["venda_p05"]
@@ -1111,6 +1115,16 @@ def build_hacienda() -> dict:
         sinal_venda=("sinal_venda", "sum"), sinal_neto=("sinal_neto", "sum"),
     )
     sem["est"] = razao * sem["venda"]
+
+    # Regua semanal: semanas COMPLETAS (5 pregoes) inteiramente dentro de meses
+    # de venda zero. Poucas (~15), entao p5/p95 sao aproximados: leia como faixa.
+    meses_sem = d.groupby(d.index.to_period("W-FRI"))["mes"].agg(lambda x: set(x))
+    limpas = (sem["pregoes"] == 5) & meses_sem.apply(lambda x: x <= set(zero))
+    regua["sem_p05"] = sem.loc[limpas, "neto"].quantile(0.05)
+    regua["sem_p95"] = sem.loc[limpas, "neto"].quantile(0.95)
+    regua["sem_n"] = int(limpas.sum())
+    # Sinal da semana: dois pregoes na cauda, ou a semana inteira abaixo da faixa.
+    sem["sinal"] = (sem["sinal_neto"] >= 2) | (sem["neto"] < regua["sem_p05"])
     sem["fim_semana"] = [p.end_time.normalize() for p in sem.index]
     sem["parcial"] = (sem["ate"] < sem["fim_semana"]) & (sem.index == sem.index.max())
     sem = sem.reset_index(drop=True)

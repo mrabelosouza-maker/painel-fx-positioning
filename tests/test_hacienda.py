@@ -61,8 +61,12 @@ def test_estimador_fecha_a_conta_e_sinal_compra_usd(hacienda):
     h, d, efetivo = hacienda
     m, c = h["mensal"], h["calib"]
     cal = m.loc[c["inicio"]:c["fim"]].dropna(subset=["efetivo"])
-    # Razao: na janela de calibracao, a soma estimada bate a soma divulgada.
-    assert cal["est"].sum() == pytest.approx(cal["efetivo"].sum())
+    # Razao fixa (a do Itau): estimativa = HACIENDA_RAZAO x venda de otros.
+    from config import HACIENDA_RAZAO
+    assert c["razao"] == HACIENDA_RAZAO
+    assert np.allclose(m["est"], HACIENDA_RAZAO * m["venda"])
+    # A razao medida segue disponivel como referencia e fecha a conta.
+    assert c["razao_calibrada"] * cal["venda"].sum() == pytest.approx(cal["efetivo"].sum())
     # Convencao do painel: venda de USD e negativa, razao positiva.
     assert (m["efetivo"].dropna() <= 0).all()
     assert (h["diario"]["venda"] <= 0).all()

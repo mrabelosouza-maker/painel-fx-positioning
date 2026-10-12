@@ -23,7 +23,7 @@ from config import (
     OFFSHORE_PRAZO_HISTORICO,
     OFFSHORE_PRAZO_FLUXO_SESSOES,
     HACIENDA_RITMO_SEMANAL, HACIENDA_HIST_DIARIO, HACIENDA_HIST_SEMANAS,
-    HACIENDA_HIST_MENSAL_INICIO, HACIENDA_TABELA_MESES,
+    HACIENDA_HIST_MENSAL_INICIO, HACIENDA_TABELA_MESES, HACIENDA_HIST_SEMANAL_INICIO,
 )
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
@@ -55,8 +55,8 @@ from chart_builder import (
     make_afp_level_line,
     make_afp_levels_chart,
     PRAZO_CORES,
-    make_hacienda_diario,
-    make_hacienda_semanal,
+    make_hacienda_pregoes,
+    make_hacienda_semanas,
     make_hacienda_mensal,
     jgp_card,
     _br,
@@ -568,8 +568,10 @@ def _hacienda_veredito(sem, regua) -> str:
     de otros, entao e o lado que separa melhor mes com e sem venda. Dois dias
     abaixo do p5 (cauda vendedora) na mesma semana e o que um mes sem venda quase nunca produz.
     """
-    n = int(sem.iloc[-1]["sinal_neto"])
-    return "Provável venda" if n >= 2 else ("Sinal fraco" if n == 1 else "Sem sinal")
+    ult = sem.iloc[-1]
+    if ult["sinal"]:
+        return "Provável venda"
+    return "Sinal fraco" if ult["sinal_neto"] == 1 else "Sem sinal"
 
 
 def _hacienda_apagao(m, calib, ultimo):
@@ -599,7 +601,7 @@ def _hacienda_resumo(h: dict) -> str:
         kpi("Venda estimada na semana (Itaú)", _br(ult["est"]),
             f"mm USD · ritmo anunciado proporcional: {_br(ritmo_prop)}"),
         kpi(f"Apagão {rot_apagao} (Itaú)", _br(apagao["est"].sum()),
-            f"mm USD · {calib['razao'] * 100:.1f}% da venda de USD de otros".replace(".", ",")),
+            f"mm USD · {calib['razao'] * 100:.0f}% da venda de USD de otros"),
         kpi("Último dado do BCCh", f"{ultimo:%d/%m}",
             f"{_DIA_SEMANA[ultimo.dayofweek]} · publica com 2 a 3 dias úteis de atraso"),
     ]) + "</div>"
@@ -618,8 +620,8 @@ def build_hacienda_section():
     aparece negativa). O build_hacienda ja entrega invertido.
     """
     chaves = [
-        "hac_resumo", "hac_venda_diario", "hac_neto_diario", "hac_tabela_diaria",
-        "hac_semanal", "hac_tabela_semanal", "hac_mensal", "hac_tabela_mensal",
+        "hac_resumo", "hac_pregoes", "hac_semanas", "hac_tabela_diaria",
+        "hac_tabela_semanal", "hac_mensal", "hac_tabela_mensal",
     ]
     h = build_hacienda()
     if not h:
@@ -628,28 +630,26 @@ def build_hacienda_section():
     d, m, sem, regua, calib, ultimo = (
         h["diario"], h["mensal"], h["semanal"], h["regua"], h["calib"], h["ultimo"])
     ritmo = -HACIENDA_RITMO_SEMANAL
-    razao_txt = f"{calib['razao'] * 100:.1f}%".replace(".", ",")
+    razao_txt = f"{calib['razao'] * 100:.0f}%"
     dd = d.tail(HACIENDA_HIST_DIARIO)
     seg = ultimo.normalize() - pd.Timedelta(days=ultimo.dayofweek)
     meses_zero = ", ".join(_mes_rotulo(t) for t in regua["meses"])
     ctx = {"hac_resumo": _hacienda_resumo(h)}
 
-    ctx["hac_venda_diario"] = jgp_card(
-        make_hacienda_diario(dd, "venda", regua["venda_p05"],
-                             f"p5 sem Hacienda: {_br(regua['venda_p05'])}",
-                             destaque_desde=seg),
-        "Venda de USD por otros sectores: a série do Itaú",
-        f"mm USD por pregão · − venda de USD · vermelho = abaixo do p5 dos meses sem venda "
-        f"({meses_zero}) · último dado {ultimo:%d/%m/%Y}",
+    ctx["hac_pregoes"] = jgp_card(
+        make_hacienda_pregoes(dd, regua),
+        "Neto de otros sectores, pregão a pregão",
+        f"mm USD · + compra de USD, − venda · vermelho = dia abaixo da faixa normal "
+        f"(um mês sem Hacienda faz isso um dia em vinte) · abre nas últimas 6 semanas, "
+        f"zoom-out devolve {HACIENDA_HIST_DIARIO} pregões · último dado {ultimo:%d/%m/%Y}",
         _FONTE_HAC,
     )
-    ctx["hac_neto_diario"] = jgp_card(
-        make_hacienda_diario(dd, "neto", regua["neto_p05"],
-                             f"p5 sem Hacienda: {_br(regua['neto_p05'])}",
-                             destaque_desde=seg),
-        "Neto de otros sectores: a confirmação",
-        "mm USD por pregão · + compra de USD, − venda · desconta o giro dos "
-        "outros agentes de otros",
+    ctx["hac_semanas"] = jgp_card(
+        make_hacienda_semanas(sem[sem["fim_semana"] >= HACIENDA_HIST_SEMANAL_INICIO], regua, ritmo),
+        "Neto de otros sectores, semana a semana",
+        f"mm USD · semana de calendário (seg a sex) · vermelho = semana com sinal: "
+        f"2 ou mais pregões fora da faixa diária, ou a semana abaixo da faixa semanal "
+        f"({regua['sem_n']} semanas sem venda) · clara = semana incompleta",
         _FONTE_HAC,
     )
 
@@ -664,25 +664,19 @@ def build_hacienda_section():
         "Pregão", sinal="sinal_neto",
     )
 
-    ctx["hac_semanal"] = jgp_card(
-        make_hacienda_semanal(sem.tail(HACIENDA_HIST_SEMANAS), ritmo),
-        "Venda estimada por semana (método Itaú)",
-        f"mm USD · − venda de USD · {razao_txt} × venda de USD de otros na semana "
-        "de calendário · barra clara = semana ainda incompleta",
-        _FONTE_HAC,
-    )
     ts = sem.tail(8).iloc[::-1].copy()
     ts.index = [
         f"{f - pd.Timedelta(days=4):%d/%m} a {a:%d/%m}" + (" (parcial)" if p else "")
         for f, a, p in zip(ts["fim_semana"], ts["ate"], ts["parcial"])
     ]
     ts["dias"] = [f"{int(a)} de {int(p)}" for a, p in zip(ts["sinal_neto"], ts["pregoes"])]
-    ts["marca"] = ts["sinal_neto"] >= 2
+    ts["marca"] = ts["sinal"]
     ctx["hac_tabela_semanal"] = make_hacienda_table(
         ts, "Últimas 8 semanas",
-        f"mm USD, + compra de USD · tingido = 2 ou mais pregões com neto na cauda "
-        f"vendedora · ritmo anunciado: {_br(ritmo)} por semana",
-        [("dias", "Pregões c/ sinal"), ("venda", "Venda de otros"), ("est", "Hacienda (est.)")],
+        f"mm USD, + compra de USD · tingido = semana com sinal · Hacienda (est.) = "
+        f"{razao_txt} × venda de otros · ritmo anunciado: {_br(ritmo)} por semana",
+        [("dias", "Pregões c/ sinal"), ("neto", "Neto"), ("venda", "Venda de otros"),
+         ("est", "Hacienda (est.)")],
         "Semana", sinal="marca",
     )
 
@@ -691,7 +685,9 @@ def build_hacienda_section():
         "Venda mensal: divulgada e estimada",
         f"mm USD · − venda de USD · verde = divulgada pela Hacienda (até "
         f"{_mes_rotulo(calib['fim'])}) · verde-claro = {razao_txt} × venda de USD de otros "
-        "· losango = a mesma estimativa nos meses com dado",
+        f"· losango = a mesma estimativa nos meses com dado (de "
+        f"{_mes_rotulo(calib['inicio'])} a {_mes_rotulo(calib['fim'])} ela soma "
+        f"{calib['vies'] * 100:+.0f}% sobre a divulgada)",
         _FONTE_HAC,
     )
     apagao, mes_ult, parcial = _hacienda_apagao(m, calib, ultimo)
@@ -705,8 +701,7 @@ def build_hacienda_section():
             apagao[["venda", "est"]].sum())
     ctx["hac_tabela_mensal"] = make_hacienda_table(
         tm, "Meses",
-        f"mm USD, + compra de USD · razão de {razao_txt} calibrada de "
-        f"{_mes_rotulo(calib['inicio'])} a {_mes_rotulo(calib['fim'])} · soma dos diários",
+        f"mm USD, + compra de USD · razão fixa de {razao_txt}, a do Itaú · soma dos diários",
         [("efetivo", "Divulgada"), ("venda", "Venda de otros"), ("est", "Hacienda (est.)")],
         "Mês",
     )

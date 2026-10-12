@@ -327,19 +327,14 @@
       <h2>Leitura da última semana</h2>
       {{ hac_resumo | safe }}
 
-      <h2>Dia a dia</h2>
-      <p class="sub">A <b>régua</b> é o que otros produz <b>sem</b> Hacienda: os pregões dos meses
-        em que a venda divulgada foi zero. O tracejado é o p5 dela, a cauda vendedora: um mês sem
-        venda passa dele um dia em vinte. Barra vermelha é dia além dele. A venda (esquerda) é a
-        série do estimador; o neto (direita) desconta o giro dos outros agentes de otros e é o que
-        confirma: dois pregões vermelhos na mesma semana são o que a régua quase nunca produz.</p>
-      <div class="grid2">
-        <div class="card">{{ hac_venda_diario | safe }}</div>
-        <div class="card">{{ hac_neto_diario | safe }}</div>
-      </div>
-
-      <h2>Semana a semana</h2>
-      <div class="card">{{ hac_semanal | safe }}</div>
+      <h2>Alta frequência: estão vendendo agora?</h2>
+      <p class="sub">O que se olha é o <b>neto</b> de otros (compra &minus; venda de USD), que já
+        desconta o giro dos outros agentes do grupo. A <b>faixa cinza</b> é o que otros faz
+        <b>sem</b> Hacienda, medida nos meses em que a venda divulgada foi zero. Dentro dela, nada a
+        dizer; <b>vermelho</b> é dia (ou semana) abaixo dela, o que um mês sem venda faz um dia em
+        vinte. Dois dias vermelhos na mesma semana são a leitura de &ldquo;provável venda&rdquo;.</p>
+      <div class="card">{{ hac_pregoes | safe }}</div>
+      <div class="card">{{ hac_semanas | safe }}</div>
       <div class="grid2">
         <div class="card">{{ hac_tabela_diaria | safe }}</div>
         <div class="card">{{ hac_tabela_semanal | safe }}</div>
@@ -360,16 +355,17 @@
         nenhum outro lugar do BDE: as contrapartidas de reservas do governo central estão em zero
         desde 2020.
         <br><br>
-        <b>2. A razão.</b> De jan/25 a mai/26, com a venda divulgada mês a mês, a Hacienda foi uma
-        fração estável da venda de USD de otros: essa fração é a razão do estimador (o valor atual
-        está no subtítulo de cada gráfico). No histórico desde 2022 ela fica em ~23%, e na mediana
-        dos meses com venda em ~25%, que é o número que o Itaú cita.
+        <b>2. A razão.</b> Comparando a venda divulgada com a venda de USD de otros mês a mês, a
+        Hacienda foi cerca de <b>25%</b> do volume na mediana dos meses com venda desde 2022 &mdash;
+        o número do Itaú, que usamos fixo. O agregado é um pouco menor (~23% desde 2022, ~20% de
+        jan/25 a mai/26), então a estimativa tende a ficar no lado alto: de jan/25 a mai/26 ela
+        soma ~25% acima do que foi divulgado.
         <br><br>
         <b>3. A estimativa.</b> Razão &times; venda de USD de otros, no mês ou na semana. É o que
         o Itaú usou para chegar a ~US$ 3 bi entre junho e setembro.
         <br><br>
         <b>Cuidados.</b> <b>(i)</b> O estimador vale para o total de um período, não para um mês
-        isolado: na calibração o erro mensal tem desvio-padrão de ~US$ 490 mi. <b>(ii)</b> No dia a
+        isolado: de jan/25 a mai/26 o erro mensal tem desvio-padrão de ~US$ 480 mi. <b>(ii)</b> No dia a
         dia ele é cego, porque atribui razão &times; venda à Hacienda até em mês sem venda nenhuma
         (abr/25, nov e dez/25 tiveram venda de otros de US$ 2,6 a 4,2 bi e Hacienda zero) &mdash;
         por isso o sinal da semana vem da régua, não da estimativa. <b>(iii)</b> Otros não é só o
