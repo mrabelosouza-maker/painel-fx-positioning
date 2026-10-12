@@ -1,8 +1,19 @@
 """Transformacoes de dados: deltas, DV01, joins."""
+import logging
+import os
+
 import numpy as np
 import pandas as pd
 
 from config import (
+    HACIENDA_ABA,
+    HACIENDA_CACHE,
+    HACIENDA_CALIB_INICIO,
+    HACIENDA_FIRSTDATE,
+    HACIENDA_REGUA_INICIO,
+    HACIENDA_ULTIMO_DIVULGADO,
+    HACIENDA_XLSX,
+    SERIES_OTROS_SPOT,
     OFFSHORE_PRAZO_BALDES,
     OFFSHORE_PRAZO_DELTA_SESSOES,
     OFFSHORE_PRAZO_GRUPOS,
@@ -958,3 +969,156 @@ def build_prazo_tabela_fluxo(
     else:
         tab["anterior"] = np.nan
     return tab, janela.index[0], janela.index[-1]
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Vendas de USD da Hacienda
+# ──────────────────────────────────────────────────────────────────────
+_log = logging.getLogger(__name__)
+
+
+def fetch_otros_spot() -> pd.DataFrame:
+    """Spot USD-CLP dos bancos residentes com "otros sectores", diario, sinal cru.
+
+    Colunas compras, ventas e neto, na otica do banco: compras = banco compra
+    USD de otros = otros VENDE USD. So pregao: a serie vem em dia corrido com
+    NaN no fim de semana, e uma linha vazia consumiria uma sessao da janela
+    rolante.
+    """
+    chaves = ["compras", "ventas", "neto"]
+    m = fetch_bcentral_matrix(
+        [SERIES_OTROS_SPOT[k] for k in chaves], firstdate=HACIENDA_FIRSTDATE,
+    )
+    if m.empty:
+        return pd.DataFrame(columns=chaves)
+    m["Data"] = pd.to_datetime(m["date_str"], dayfirst=True, errors="coerce")
+    df = m.dropna(subset=["Data"]).set_index("Data").sort_index()
+    df = df[[f"V{i}" for i in range(len(chaves))]]
+    df.columns = chaves
+    return df.dropna(how="any")
+
+
+def load_hacienda_mensal() -> pd.Series:
+    """Venda efetiva mensal da Hacienda (mm USD), ate o ultimo mes divulgado.
+
+    Le a planilha do time e regrava o cache versionado; sem o drive R:, cai no
+    cache. Indice = 1o dia do mes. Depois de HACIENDA_ULTIMO_DIVULGADO nao ha
+    linha: zero ali seria "nao sabemos", e a serie nao pode dizer que sabe.
+    """
+    ultimo = pd.Timestamp(HACIENDA_ULTIMO_DIVULGADO + "-01")
+    try:
+        raw = pd.read_excel(
+            HACIENDA_XLSX, sheet_name=HACIENDA_ABA, header=None, usecols=[0, 1],
+        )
+        raw.columns = ["mes", "valor"]
+        raw["mes"] = pd.to_datetime(raw["mes"], errors="coerce")
+        raw["valor"] = pd.to_numeric(raw["valor"], errors="coerce")
+        s = raw.dropna().set_index("mes")["valor"]
+        s.index = s.index.to_period("M").to_timestamp()
+        # De jan/2026 em diante a planilha passou a anotar em mil USD. O teste de
+        # magnitude junto com a data protege contra alguem corrigir a unidade la.
+        em_mil = (s.index >= "2026-01-01") & (s > 10_000)
+        s = s.where(~em_mil, s / 1000)
+        s = s[s.index <= ultimo].rename("efetivo")
+        os.makedirs(os.path.dirname(HACIENDA_CACHE), exist_ok=True)
+        s.rename_axis("mes").to_csv(HACIENDA_CACHE)
+        return s
+    except Exception as e:
+        _log.warning("Planilha da Hacienda inacessivel (%s), usando cache", e)
+    try:
+        c = pd.read_csv(HACIENDA_CACHE, parse_dates=["mes"]).set_index("mes")
+        return c["efetivo"][c.index <= ultimo]
+    except Exception as e:
+        _log.error("Cache da Hacienda tambem falhou: %s", e)
+        return pd.Series(dtype=float, name="efetivo")
+
+
+def build_hacienda() -> dict:
+    """Tudo o que a aba de vendas da Hacienda desenha.
+
+    Dois estimadores, calibrados contra a venda divulgada desde
+    HACIENDA_CALIB_INICIO ate HACIENDA_ULTIMO_DIVULGADO:
+
+      - razao (o do Itau): venda = r x compras de otros, com r = soma das vendas
+        / soma das compras na calibracao. Bom para o total de um periodo longo;
+        cego no dia a dia, porque paga r x compras ate em mes sem venda.
+      - neto + base: venda = neto de otros + b por pregao, com b = o quanto os
+        demais agentes de otros compraram em media (soma de venda - neto, por
+        pregao). E o que serve no dia a dia: o neto ja desconta as compras e
+        vendas dos outros, e a base corrige o vies que sobra.
+
+    E a regua "sem Hacienda": a distribuicao do neto nos meses de venda
+    divulgada zero desde HACIENDA_REGUA_INICIO. Dia ou janela acima do p95 dela
+    e o que um mes sem Hacienda raramente produz.
+    """
+    d = fetch_otros_spot()
+    if d.empty:
+        return {}
+    efetivo = load_hacienda_mensal()
+
+    d = d.copy()
+    d["mes"] = d.index.to_period("M").to_timestamp()
+    d["neto5"] = d["neto"].rolling(5).sum()
+
+    # ── Mensal: soma dos diarios, para o mensal e o diario falarem a mesma lingua
+    m = d.groupby("mes").agg(
+        compras=("compras", "sum"), ventas=("ventas", "sum"),
+        neto=("neto", "sum"), pregoes=("neto", "size"),
+    )
+    m["efetivo"] = efetivo.reindex(m.index)
+
+    cal = m.loc[HACIENDA_CALIB_INICIO:HACIENDA_ULTIMO_DIVULGADO].dropna(subset=["efetivo"])
+    razao = cal["efetivo"].sum() / cal["compras"].sum()
+    base = (cal["efetivo"] - cal["neto"]).sum() / cal["pregoes"].sum()
+    m["est_razao"] = razao * m["compras"]
+    m["est_neto"] = m["neto"] + base * m["pregoes"]
+
+    hist = m.dropna(subset=["efetivo"])
+    com_venda = hist[hist["efetivo"] > 0]
+    calib = {
+        "razao": razao,
+        "base": base,
+        "inicio": pd.Timestamp(HACIENDA_CALIB_INICIO + "-01"),
+        "fim": pd.Timestamp(HACIENDA_ULTIMO_DIVULGADO + "-01"),
+        "razao_hist": hist["efetivo"].sum() / hist["compras"].sum(),
+        "razao_mediana": (com_venda["efetivo"] / com_venda["compras"]).median(),
+        "corr_neto": hist["efetivo"].corr(hist["neto"]),
+        "corr_compras": hist["efetivo"].corr(hist["compras"]),
+        "hist_inicio": hist.index.min(),
+    }
+
+    # ── Regua sem Hacienda. Janela de 5 so conta se os 5 pregoes cairem em mes
+    # sem venda: a que atravessa a virada de um mes com venda nao e "sem".
+    zero = m.index[(m["efetivo"] == 0) & (m.index >= HACIENDA_REGUA_INICIO)]
+    em_zero = d["mes"].isin(zero)
+    d5_ok = em_zero.astype(int).rolling(5).sum() == 5
+    regua = {
+        "meses": list(zero),
+        "n_dias": int(em_zero.sum()),
+        "neto_p95": d.loc[em_zero, "neto"].quantile(0.95),
+        "compras_p95": d.loc[em_zero, "compras"].quantile(0.95),
+        "neto5_p05": d.loc[d5_ok, "neto5"].quantile(0.05),
+        "neto5_p95": d.loc[d5_ok, "neto5"].quantile(0.95),
+    }
+
+    d["acima"] = d["neto"] > regua["neto_p95"]
+    d["est"] = d["neto"] + base
+
+    # ── Semana de calendario (seg-sex). Aqui sim calendario, e nao blocos de 5
+    # pregoes: o programa anunciado e "por semana", e a pergunta e "a semana
+    # passada teve venda?". A ultima semana pode estar incompleta.
+    sem = d.groupby(d.index.to_period("W-FRI")).agg(
+        ate=("neto", lambda x: x.index.max()),
+        pregoes=("neto", "size"), compras=("compras", "sum"),
+        neto=("neto", "sum"), acima=("acima", "sum"),
+    )
+    sem["est"] = sem["neto"] + base * sem["pregoes"]
+    sem["fim_semana"] = [p.end_time.normalize() for p in sem.index]
+    sem["parcial"] = sem["ate"] < sem["fim_semana"]
+    sem["parcial"] &= sem.index == sem.index.max()
+    sem = sem.reset_index(drop=True)
+
+    return {
+        "diario": d, "mensal": m, "semanal": sem,
+        "regua": regua, "calib": calib, "ultimo": d.index.max(),
+    }

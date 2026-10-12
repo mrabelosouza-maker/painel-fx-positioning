@@ -324,3 +324,68 @@ OFFSHORE_PRAZO_HISTORICO = 190
 # hoje. O zoom-out nao devolve mais do que isso, porque mais do que isso nao
 # esta no DOM.
 OFFSHORE_PRAZO_DEFAULT_VIEW = OFFSHORE_PRAZO_HISTORICO
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Vendas de USD da Hacienda: rastreio pelo spot de "otros sectores"
+# ──────────────────────────────────────────────────────────────────────
+# A Hacienda vende USD por intermedio dos bancos, e o BCCh nao publica a venda
+# dela em lugar nenhum do BDE: as contrapartidas de reservas e de base monetaria
+# do governo central (F051.H821, H612, H921) ficam em zero desde 2020, porque a
+# venda nao passa pelo BCCh. O que sobra e o spot USD-CLP dos bancos residentes
+# com a contraparte "otros sectores" (R.50), onde o Fisco cai junto com outras
+# entidades. E proxy, nao medida.
+#
+# Otica do banco residente, e a aba usa o sinal CRU de proposito: "compras" =
+# banco compra USD de otros = otros VENDE USD, logo neto > 0 = otros vendendo
+# USD, que e o lado em que a Hacienda aparece. Inferido dos dados (o neto sobe
+# nos meses de venda forte; corr mensal +0,7), nao de nota metodologica.
+SERIES_OTROS_SPOT = {
+    "compras": "F099.SPT.FLU.Z.40.R.50.COM.Z.MMUSD.CLPUSD.Z.Z.0.D",
+    "ventas":  "F099.SPT.FLU.Z.40.R.50.VTA.Z.MMUSD.CLPUSD.Z.Z.0.D",
+    "neto":    "F099.SPT.FLU.Z.40.R.50.NET.Z.MMUSD.CLPUSD.Z.Z.0.D",
+}
+# A serie diaria comeca em jan/2022; o default do painel (jun/22) cortaria cinco
+# meses de calibracao.
+HACIENDA_FIRSTDATE = "2022-01-01"
+
+# Venda efetiva mensal, da planilha do time. Ate dez/2025 a coluna vem em mm USD
+# e a partir de jan/2026 em mil USD (550000 = 550 mm), daí a normalizacao no
+# loader. O cache vai versionado: o build continua de pe sem o drive R:.
+HACIENDA_XLSX = r"R:\Macro EMs\Chile\5. Externo\Fluxos CLP\reservas.xlsx"
+HACIENDA_ABA = "Vendas Hacienda"
+HACIENDA_CACHE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "hacienda_vendas.csv",
+)
+
+# Ultimo mes com venda DIVULGADA. Depois dele a planilha traz zero, mas e zero de
+# "nao sabemos", nao de "nao vendeu": a Hacienda parou de publicar o leilao no
+# fim de maio/2026. Tratado como NaN, senao a calibracao aprende que o neto alto
+# de junho veio sem venda nenhuma.
+HACIENDA_ULTIMO_DIVULGADO = "2026-05"
+
+# Janela de calibracao dos dois estimadores. Desde jan/2025 e nao a amostra
+# inteira: o volume bruto de otros cresceu muito em 2026 e a razao Hacienda /
+# compras caiu de ~23% (2022+) para ~20%; a base dos demais agentes tambem mudou
+# de sinal (compradores liquidos de ~US$ 500 mi/mes desde 2025).
+HACIENDA_CALIB_INICIO = "2025-01"
+
+# Regua "sem Hacienda": dias de meses com venda divulgada ZERO, desde esta data.
+# Desde 2024 porque o volume de otros de 2022-23 era outro patamar.
+HACIENDA_REGUA_INICIO = "2024-01"
+
+# Ritmo anunciado em out/2026: US$ 600 mi por semana.
+HACIENDA_RITMO_SEMANAL = 600
+
+# Historico dos graficos diarios, em pregoes (~6 meses). Orcamento de render:
+# ver o cabecalho de tests/test_peso_da_pagina.py.
+HACIENDA_HIST_DIARIO = 130
+
+# Meses no grafico mensal e semanas no semanal. O mensal abre na calibracao: antes
+# dela a base dos outros agentes era outra (~8 por pregao em 2022-24 contra ~25
+# desde 2025) e o neto + base erra por construcao, o que so polui a leitura. O
+# grafico de calibracao mostra esses meses, em cinza.
+HACIENDA_HIST_MENSAL_INICIO = HACIENDA_CALIB_INICIO
+HACIENDA_TABELA_MESES = 12
+HACIENDA_HIST_SEMANAS = 40

@@ -1031,3 +1031,276 @@ def make_afp_levels_chart(
     _usd_side_labels(fig)
     _apply_category_xaxis(fig)
     return _to_html(fig)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Vendas de USD da Hacienda (spot de "otros sectores")
+# ──────────────────────────────────────────────────────────────────────
+# Sinal CRU do BCCh nesta aba, ao contrario das de setores: acima de zero = otros
+# VENDENDO USD, que e o lado em que a Hacienda aparece. Inverter para compra-de-USD
+# poria a venda dela para baixo, e a pergunta da aba e "quanto ela vendeu".
+HAC_COR_SINAL = JGP_VERMELHO     # dia/semana acima da regua: provavel venda
+HAC_COR_NEUTRO = "#BDBDBD"
+HAC_COR_EFETIVO = JGP_VERDE
+HAC_COR_EST_NETO = JGP_PRETO
+HAC_COR_EST_RAZAO = JGP_AZUL
+HAC_COR_FAIXA = "rgba(127,127,127,0.16)"
+
+
+def _hac_destaque(fig: go.Figure, x: list[str], desde: str | None, texto: str) -> None:
+    """Sombreia do pregao `desde` ate o fim do eixo categorico (a ultima semana)."""
+    if not desde or desde not in x:
+        return
+    i = x.index(desde)
+    fig.add_vrect(
+        x0=i - 0.5, x1=len(x) - 0.5, fillcolor="rgba(230,57,70,0.08)",
+        line_width=0, layer="below", annotation_text=texto,
+        annotation_position="top left", annotation_font=dict(size=10, color=JGP_VERMELHO),
+    )
+
+
+def _hac_side_labels(fig: go.Figure) -> None:
+    """Convencao da aba: + = otros vendendo USD. Cores trocadas de proposito em
+    relacao a _usd_side_labels: aqui o lado de cima e o da venda de USD."""
+    for y, anchor, text, color in [
+        (0.97, "top", "▲ acima de zero: otros vendendo USD (lado da Hacienda)", JGP_VERMELHO),
+        (0.03, "bottom", "▼ abaixo de zero: otros comprando USD", JGP_VERDE),
+    ]:
+        fig.add_annotation(
+            xref="paper", x=0.012, y=y, yref="paper", text=text, showarrow=False,
+            font=dict(color=color, size=11), xanchor="left", yanchor=anchor,
+            bgcolor="rgba(255,255,255,0.75)", borderpad=3,
+        )
+
+
+def _hac_ref_line(
+    fig: go.Figure, y: float, texto: str, cor: str, dash: str = "dash",
+    pos: str = "top right",
+) -> None:
+    fig.add_hline(
+        y=y, line_dash=dash, line_color=cor, line_width=1.2,
+        annotation_text=texto, annotation_position=pos,
+        annotation_font=dict(size=10, color=cor),
+    )
+
+
+def make_hacienda_diario(
+    d: pd.DataFrame, col: str, limiar: float, title: str,
+    rotulo_limiar: str, ref: float | None = None, rotulo_ref: str = "",
+    destaque: str | None = None,
+) -> str:
+    """Barras diarias de uma perna de otros, pintadas onde passam do limiar.
+
+    O limiar e o p95 da regua sem Hacienda: o cinza e o que mes sem venda produz
+    o tempo todo, o vermelho e o que ele raramente produz.
+    """
+    if d.empty:
+        return "<p>Dados indisponíveis</p>"
+    x = _date_strings(d.index.to_series())
+    cores = [HAC_COR_SINAL if v > limiar else HAC_COR_NEUTRO for v in d[col]]
+    fig = go.Figure(go.Bar(
+        x=x, y=d[col], marker_color=cores,
+        hovertemplate="%{x}<br>%{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+    # Os dois rotulos em lados opostos: p95 e ritmo diario ficam a ~15 mm USD um
+    # do outro e os textos se atropelavam no canto direito.
+    _hac_ref_line(fig, limiar, rotulo_limiar, JGP_CINZA, pos="top left")
+    if ref is not None:
+        _hac_ref_line(fig, ref, rotulo_ref, JGP_VERMELHO, dash="dot", pos="bottom right")
+    _hac_destaque(fig, x, destaque, "última semana")
+    lim = max(d[col].abs().max(), limiar, ref or 0) * 1.25
+    lo = -lim if d[col].min() < 0 else 0
+    fig.update_layout(
+        title=title, template="jgp", height=400,
+        margin=dict(l=60, r=20, t=64, b=60),
+        yaxis_title="USD million", showlegend=False, bargap=0.25,
+    )
+    fig.update_yaxes(range=[lo, lim])
+    if lo < 0:
+        _hac_side_labels(fig)
+    _apply_category_xaxis(fig)
+    return _to_html(fig)
+
+
+def make_hacienda_rolante(
+    d: pd.DataFrame, regua: dict, ritmo: float, title: str, destaque: str | None = None,
+) -> str:
+    """Neto de otros em 5 pregoes rolantes contra a faixa sem Hacienda.
+
+    A faixa cinza e p5-p95 das janelas de 5 pregoes inteiramente dentro de
+    meses de venda zero. Linha acima da faixa e o que mes sem venda quase nunca
+    produz; a pontilhada e o ritmo anunciado, para dar a escala do programa.
+    """
+    if d.empty:
+        return "<p>Dados indisponíveis</p>"
+    x = _date_strings(d.index.to_series())
+    lo, hi = regua["neto5_p05"], regua["neto5_p95"]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x, y=[hi] * len(x), mode="lines", line=dict(width=0),
+        hoverinfo="skip", showlegend=False,
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=[lo] * len(x), mode="lines", line=dict(width=0),
+        fill="tonexty", fillcolor=HAC_COR_FAIXA, hoverinfo="skip",
+        name="faixa sem Hacienda (p5–p95)",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=d["neto5"], mode="lines", line=dict(color=JGP_PRETO, width=1.6),
+        name="neto de otros, 5 pregões",
+        hovertemplate="5 pregões até %{x}<br>%{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fora = d["neto5"] > hi
+    fig.add_trace(go.Scatter(
+        x=[xi for xi, f in zip(x, fora) if f], y=d.loc[fora, "neto5"],
+        mode="markers", marker=dict(color=HAC_COR_SINAL, size=6),
+        name="acima da faixa", hoverinfo="skip",
+    ))
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+    _hac_ref_line(fig, ritmo, f"ritmo anunciado: {ritmo:,.0f} / 5 pregões", JGP_VERMELHO, dash="dot")
+    _hac_destaque(fig, x, destaque, "última semana")
+    lim = max(d["neto5"].abs().max(), ritmo) * 1.2
+    fig.update_layout(
+        title=title, template="jgp", height=430,
+        margin=dict(l=60, r=20, t=64, b=60), yaxis_title="USD million",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_yaxes(range=[-lim, lim])
+    _hac_side_labels(fig)
+    _apply_category_xaxis(fig)
+    return _to_html(fig)
+
+
+def make_hacienda_semanal(sem: pd.DataFrame, ritmo: float, title: str) -> str:
+    """Venda estimada por semana (neto + base), com o ritmo anunciado de regua.
+
+    Semana com dia acima da regua sai em vermelho; a ultima, se incompleta, sai
+    clara e com o numero de pregoes no rotulo.
+    """
+    if sem.empty:
+        return "<p>Dados indisponíveis</p>"
+    x = [a.strftime("%d/%m/%y") for a in sem["ate"]]
+    cores = [HAC_COR_SINAL if a > 0 else HAC_COR_NEUTRO for a in sem["acima"]]
+    opac = [0.45 if p else 1.0 for p in sem["parcial"]]
+    custom = list(zip(sem["neto"], sem["pregoes"], sem["acima"]))
+    fig = go.Figure(go.Bar(
+        x=x, y=sem["est"], marker=dict(color=cores, opacity=opac),
+        customdata=custom,
+        hovertemplate=(
+            "semana até %{x}<br>estimativa: %{y:+,.0f} mm USD"
+            "<br>neto de otros: %{customdata[0]:+,.0f}"
+            "<br>pregões: %{customdata[1]} · dias acima da régua: %{customdata[2]}"
+            "<extra></extra>"
+        ),
+    ))
+    ult = sem.iloc[-1]
+    if ult["parcial"]:
+        fig.add_annotation(
+            x=x[-1], y=ult["est"], yshift=12 if ult["est"] >= 0 else -12,
+            text=f"parcial: {int(ult['pregoes'])} de 5 pregões",
+            showarrow=False, font=dict(size=10, color=JGP_CINZA),
+            yanchor="bottom" if ult["est"] >= 0 else "top",
+        )
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+    _hac_ref_line(fig, ritmo, f"ritmo anunciado: {ritmo:,.0f} / semana", JGP_VERMELHO,
+                  dash="dot", pos="top left")
+    lim = max(sem["est"].abs().max(), ritmo) * 1.2
+    fig.update_layout(
+        title=title, template="jgp", height=420,
+        margin=dict(l=60, r=20, t=64, b=70),
+        yaxis_title="USD million (venda estimada)", showlegend=False, bargap=0.25,
+    )
+    fig.update_yaxes(range=[-lim, lim])
+    _hac_side_labels(fig)
+    _apply_category_xaxis(fig, nticks=14)
+    return _to_html(fig)
+
+
+def make_hacienda_mensal(m: pd.DataFrame, fim_divulgado: pd.Timestamp, title: str) -> str:
+    """Venda efetiva mensal contra os dois estimadores, com o apagao sombreado."""
+    if m.empty:
+        return "<p>Dados indisponíveis</p>"
+    x = [i.strftime("%Y-%m") for i in m.index]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=x, y=m["efetivo"], name="venda efetiva (divulgada)",
+        marker_color=HAC_COR_EFETIVO,
+        hovertemplate="%{x}<br>efetiva: %{y:,.0f} mm USD<extra></extra>",
+    ))
+    for col, nome, cor, simb in [
+        ("est_neto", "estimativa: neto + base", HAC_COR_EST_NETO, "diamond"),
+        ("est_razao", "estimativa: razão × compras (Itaú)", HAC_COR_EST_RAZAO, "circle"),
+    ]:
+        fig.add_trace(go.Scatter(
+            x=x, y=m[col], name=nome, mode="lines+markers",
+            line=dict(color=cor, width=1.4), marker=dict(color=cor, size=6, symbol=simb),
+            hovertemplate=f"%{{x}}<br>{nome}: %{{y:+,.0f}} mm USD<extra></extra>",
+        ))
+    apagao = [i for i, t in enumerate(m.index) if t > fim_divulgado]
+    if apagao:
+        fig.add_vrect(
+            x0=apagao[0] - 0.5, x1=apagao[-1] + 0.5, fillcolor=HAC_COR_FAIXA,
+            line_width=0, layer="below",
+            annotation_text="sem divulgação", annotation_position="top left",
+            annotation_font=dict(size=10, color=JGP_CINZA),
+        )
+    fig.add_hline(y=0, line_color="black", line_width=0.8)
+    fig.update_layout(
+        title=title, template="jgp", height=460,
+        margin=dict(l=60, r=20, t=64, b=90), yaxis_title="USD million",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        bargap=0.3,
+    )
+    _apply_category_xaxis(fig, nticks=18)
+    return _to_html(fig)
+
+
+def make_hacienda_calibracao(m: pd.DataFrame, calib: dict, title: str) -> str:
+    """Os dois ajustes da calibracao, lado a lado: venda vs neto e vs compras.
+
+    Cada ponto e um mes com venda divulgada. A reta da esquerda e a do estimador
+    neto + base (inclinacao 1, intercepto = base x pregoes medios); a da direita,
+    a do estimador de razao (reta pela origem com inclinacao r).
+    """
+    h = m.dropna(subset=["efetivo"])
+    if h.empty:
+        return "<p>Dados indisponíveis</p>"
+    cal = h.index >= calib["inicio"]
+    rot = [i.strftime("%m/%Y") for i in h.index]
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.1, subplot_titles=(
+        f"vs NETO de otros (corr {calib['corr_neto']:+.2f})",
+        f"vs COMPRAS de otros (corr {calib['corr_compras']:+.2f})",
+    ))
+    pregoes = h.loc[cal, "pregoes"].mean()
+    for c, xcol in [(1, "neto"), (2, "compras")]:
+        for mask, nome, cor in [
+            (~cal, f"antes de {calib['inicio']:%m/%Y}", "#BDBDBD"),
+            (cal, f"calibração ({calib['inicio']:%m/%Y}–{calib['fim']:%m/%Y})", JGP_VERDE),
+        ]:
+            fig.add_trace(go.Scatter(
+                x=h.loc[mask, xcol], y=h.loc[mask, "efetivo"], mode="markers",
+                marker=dict(color=cor, size=7, line=dict(color="white", width=0.5)),
+                name=nome, showlegend=(c == 1), legendgroup=nome,
+                text=[r for r, k in zip(rot, mask) if k],
+                hovertemplate=f"%{{text}}<br>{xcol}: %{{x:+,.0f}}<br>efetiva: %{{y:,.0f}}<extra></extra>",
+            ), row=1, col=c)
+        xs = pd.Series([h.loc[cal, xcol].min(), h.loc[cal, xcol].max()])
+        ys = xs + calib["base"] * pregoes if xcol == "neto" else calib["razao"] * xs
+        rotulo = (f"neto + {calib['base']:.0f}/pregão" if xcol == "neto"
+                  else f"{calib['razao']:.1%} × compras")
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines", line=dict(color=JGP_PRETO, width=1.2, dash="dash"),
+            name=rotulo, showlegend=True, hoverinfo="skip",
+        ), row=1, col=c)
+    fig.update_layout(
+        title=title, template="jgp", height=440,
+        margin=dict(l=60, r=20, t=90, b=60),
+        legend=dict(orientation="h", yanchor="top", y=-0.2, xanchor="center", x=0.5),
+    )
+    fig.update_xaxes(title_text="neto de otros no mês (mm USD)", row=1, col=1)
+    fig.update_xaxes(title_text="compras de otros no mês (mm USD)", row=1, col=2)
+    fig.update_yaxes(title_text="venda efetiva (mm USD)", row=1, col=1)
+    for a in fig.layout.annotations:
+        a.font = dict(size=11, color="#4D4D4D")
+    return _to_html(fig)
