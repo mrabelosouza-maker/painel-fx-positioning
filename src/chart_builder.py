@@ -1039,7 +1039,8 @@ def make_afp_levels_chart(
 # Esta aba segue o padrao do skill jgp-html-report a risca (plotly-jgp.js), e
 # nao o desenho legado das outras abas: titulo, subtitulo e fonte ficam FORA da
 # figura, no card (h3 / .csub / .cfonte); eixo de data com rotulo horizontal
-# %d/%b em vez de ISO a 45 graus; numeros pt-BR (separators ",."); legenda sem
+# %d/%b em vez de ISO a 45 graus; ponto decimal e virgula de milhar, como o
+# resto do painel e por pedido da mesa (separators ".,"); legenda sem
 # moldura no topo esquerdo; nada de rotulo de convencao dentro da area do plot.
 #
 # Convencao do painel: + = compra de USD, - = venda de USD. A venda da Hacienda
@@ -1060,9 +1061,8 @@ _HAC_CFG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2
 
 
 def _br(v: float, d: int = 0, sinal: bool = True) -> str:
-    """1234.5 -> '+1.235' (pt-BR)."""
-    s = f"{v:+,.{d}f}" if sinal else f"{v:,.{d}f}"
-    return s.replace(",", "X").replace(".", ",").replace("X", ".")
+    """1234.5 -> '+1,235': ponto decimal, virgula de milhar (padrao do painel)."""
+    return f"{v + 0.0:+,.{d}f}" if sinal else f"{v + 0.0:,.{d}f}"
 
 
 def jgp_card(fig_html: str, titulo: str, sub: str = "", fonte: str = "") -> str:
@@ -1094,7 +1094,7 @@ def _hac_layout(
             xaxis["rangebreaks"] = [dict(bounds=["sat", "mon"])]
     fig.update_layout(
         template="jgp", title=None, height=height,
-        margin=dict(l=52, r=56, t=28, b=28), separators=",.",
+        margin=dict(l=52, r=56, t=28, b=28), separators=".,",
         hovermode="x unified", dragmode="zoom",
         legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0,
                     font=dict(size=11, color="#4D4D4D"), bgcolor="rgba(0,0,0,0)",
@@ -1152,7 +1152,7 @@ def make_hacienda_pregoes(d: pd.DataFrame, regua: dict, n_view: int = 30,
         hovertemplate="%{customdata} %{x}: %{y:+,.0f} mm USD<extra></extra>",
     ))
     _hac_faixa(fig, regua["neto_p05"], regua["neto_p95"],
-               "faixa normal sem Hacienda (p5–p95 dos meses sem venda)")
+               "faixa normal: o que otros faz por dia nos meses sem Hacienda")
 
     semana = d.index.to_period("W-FRI")
     inicio = [i for i in range(len(x)) if i == 0 or semana[i] != semana[i - 1]]
@@ -1200,17 +1200,17 @@ def make_hacienda_semanas(sem: pd.DataFrame, regua: dict, ritmo: float,
         customdata=list(zip(sem["pregoes"], sem["sinal_neto"], sem["est"])),
         showlegend=False,
         hovertemplate=("semana de %{x}: neto %{y:+,.0f} mm USD<br>"
-                       "%{customdata[1]} de %{customdata[0]} pregões na cauda · "
+                       "%{customdata[1]} de %{customdata[0]} pregões abaixo da faixa · "
                        "Hacienda (Itaú) %{customdata[2]:+,.0f}<extra></extra>"),
     ))
     _hac_faixa(fig, regua["sem_p05"], regua["sem_p95"],
-               "faixa normal sem Hacienda (p5–p95 das semanas sem venda)")
+               "faixa normal: o que otros faz por semana sem Hacienda")
     _hac_ref(fig, ritmo, f"ritmo anunciado: {_br(ritmo)} / semana",
              HAC_ALERTA, "dot", "bottom right")
     ult = sem.iloc[-1]
     rot = f"<b>{_br(ult['neto'])}</b>"
     if ult["parcial"]:
-        rot += f"<br>parcial · {int(ult['pregoes'])} de 5"
+        rot += f"<br>{int(ult['pregoes'])} de 5 pregões publicados"
     fig.add_annotation(x=x[-1], y=ult["neto"], text=rot, showarrow=False,
                        yanchor="top" if ult["neto"] < 0 else "bottom",
                        yshift=-3 if ult["neto"] < 0 else 3,

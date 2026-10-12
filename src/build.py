@@ -596,8 +596,11 @@ def _hacienda_resumo(h: dict) -> str:
                 f'<div class="d">{desc}</div></div>')
 
     return '<div class="kpis">' + "".join([
-        kpi(f"Semana até {ult['ate']:%d/%m}", _hacienda_veredito(sem, regua),
-            f"{int(ult['sinal_neto'])} de {int(ult['pregoes'])} pregões com neto na cauda vendedora"),
+        kpi(f"Semana de {ult['fim_semana'] - pd.Timedelta(days=4):%d/%m} · dados até "
+            f"{_DIA_SEMANA[ult['ate'].dayofweek]} {ult['ate']:%d/%m}",
+            _hacienda_veredito(sem, regua),
+            f"{int(ult['sinal_neto'])} dos {int(ult['pregoes'])} pregões publicados com venda líquida "
+            f"acima de US$ {-regua['neto_p05']:,.0f} mi"),
         kpi("Venda estimada na semana (Itaú)", _br(ult["est"]),
             f"mm USD · ritmo anunciado proporcional: {_br(ritmo_prop)}"),
         kpi(f"Apagão {rot_apagao} (Itaú)", _br(apagao["est"].sum()),
@@ -639,8 +642,9 @@ def build_hacienda_section():
     ctx["hac_pregoes"] = jgp_card(
         make_hacienda_pregoes(dd, regua),
         "Neto de otros sectores, pregão a pregão",
-        f"mm USD · + compra de USD, − venda · vermelho = dia abaixo da faixa normal "
-        f"(um mês sem Hacienda faz isso um dia em vinte) · abre nas últimas 6 semanas, "
+        f"mm USD · + compra de USD, − venda · vermelho = venda líquida acima de "
+        f"US$ {-regua['neto_p05']:,.0f} mi no dia, o que otros raramente faz em mês sem "
+        f"Hacienda · abre nas últimas 6 semanas, "
         f"zoom-out devolve {HACIENDA_HIST_DIARIO} pregões · último dado {ultimo:%d/%m/%Y}",
         _FONTE_HAC,
     )
@@ -648,8 +652,9 @@ def build_hacienda_section():
         make_hacienda_semanas(sem[sem["fim_semana"] >= HACIENDA_HIST_SEMANAL_INICIO], regua, ritmo),
         "Neto de otros sectores, semana a semana",
         f"mm USD · semana de calendário (seg a sex) · vermelho = semana com sinal: "
-        f"2 ou mais pregões fora da faixa diária, ou a semana abaixo da faixa semanal "
-        f"({regua['sem_n']} semanas sem venda) · clara = semana incompleta",
+        f"2 ou mais dias com venda líquida acima de US$ {-regua['neto_p05']:,.0f} mi, ou "
+        f"a semana acima de US$ {-regua['sem_p05']:,.0f} mi, o máximo que se vê sem "
+        f"Hacienda · clara = semana incompleta",
         _FONTE_HAC,
     )
 
@@ -657,8 +662,8 @@ def build_hacienda_section():
     td.index = [f"{t:%d/%m} {_DIA_SEMANA[t.dayofweek]}" for t in td.index]
     ctx["hac_tabela_diaria"] = make_hacienda_table(
         td, "Últimos 10 pregões",
-        f"mm USD, + compra de USD · tingido = neto abaixo da régua "
-        f"({_br(regua['neto_p05'])}) · Hacienda = {razao_txt} × venda de otros",
+        f"mm USD, + compra de USD · tingido = venda líquida acima de "
+        f"US$ {-regua['neto_p05']:,.0f} mi · Hacienda = {razao_txt} × venda de otros",
         [("venda", "Venda"), ("compra", "Compra"), ("neto", "Neto"),
          ("est", "Hacienda (est.)")],
         "Pregão", sinal="sinal_neto",

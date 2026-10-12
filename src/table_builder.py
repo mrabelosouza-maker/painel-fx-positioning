@@ -301,7 +301,7 @@ def make_hacienda_table(
             v = row.get(c)
             txt = "—" if v is None or pd.isna(v) else (
                 v if isinstance(v, str)
-                else f"{float(v) + 0.0:+,.0f}".replace(",", ".")   # pt-BR: 1.408
+                else f"{float(v) + 0.0:+,.0f}"   # padrao do painel: 1,408
             )
             cells.append(f"<td class='num'>{txt}</td>")
         linhas.append(f"<tr{cls}>" + "".join(cells) + "</tr>")

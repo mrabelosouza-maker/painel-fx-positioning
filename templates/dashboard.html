@@ -749,11 +749,14 @@ window.JGPLazy = (function () {
 
     <!-- ══════════════════ VENDAS HACIENDA ══════════════════ -->
     <div id="tab-hacienda" class="tab">
-      <p class="lead">A Hacienda vende dólares para converter em pesos a receita do cobre e a
-        captação externa. Até maio/2026 divulgava os leilões; desde então vende direto com
-        contrapartes aprovadas e não publica nada. Esta aba estima a venda pelo
-        <b>método do Itaú</b>: uma fração fixa da venda de USD que o BCCh observa em
-        <b>otros sectores</b>, onde o Fisco aparece. É <b>proxy, não medida</b>.</p>
+      <p class="lead">A Hacienda parou de divulgar as vendas de USD no fim de maio/2026.
+        Seguimos os passos do Itaú para reconstruir a série a partir do BCCh, que publica
+        diariamente o spot dos bancos com a contraparte <b>otros sectores</b>. A Hacienda vende por
+        meio dos bancos e aparece ali, mas otros também inclui outras entidades (governo, famílias e
+        outros agentes), por isso a incerteza é grande. Por simplificação, usamos a proporção
+        histórica entre a venda efetiva divulgada e a venda de USD de otros, de ~25%, e a aplicamos
+        aos meses sem divulgação. <b>É uma proxy, não a venda observada</b>: dá a ordem de grandeza
+        e a direção, não o valor exato.</p>
       <p class="sub">Convenção do painel: <b>+ compra de USD, − venda de USD</b>. A venda da
         Hacienda aparece negativa.</p>
 
@@ -763,9 +766,10 @@ window.JGPLazy = (function () {
       <h2>Alta frequência: estão vendendo agora?</h2>
       <p class="sub">O que se olha é o <b>neto</b> de otros (compra &minus; venda de USD), que já
         desconta o giro dos outros agentes do grupo. A <b>faixa cinza</b> é o que otros faz
-        <b>sem</b> Hacienda, medida nos meses em que a venda divulgada foi zero. Dentro dela, nada a
-        dizer; <b>vermelho</b> é dia (ou semana) abaixo dela, o que um mês sem venda faz um dia em
-        vinte. Dois dias vermelhos na mesma semana são a leitura de &ldquo;provável venda&rdquo;.</p>
+        <b>sem</b> Hacienda, medida nos meses em que a venda divulgada foi zero: dentro dela, nada a
+        dizer. <b>Vermelho</b> é o que otros raramente faz sozinho &mdash; uma venda líquida maior que
+        o piso da faixa no dia (ou na semana; o valor está no subtítulo de cada gráfico). Dois dias
+        vermelhos na mesma semana são a leitura de &ldquo;provável venda&rdquo;.</p>
       <div class="card">{{ hac_pregoes | safe }}</div>
       <div class="card">{{ hac_semanas | safe }}</div>
       <div class="grid2">
