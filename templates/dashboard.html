@@ -455,6 +455,7 @@ window.JGPLazy = (function () {
   <button class="tabbtn" data-tab="banks">Bancos</button>
   <button class="tabbtn" data-tab="pensoff">Fundos + Offshore</button>
   <button class="tabbtn" data-tab="sectors">Todos os Setores</button>
+  <button class="tabbtn" data-tab="hacienda">Vendas Hacienda</button>
   <button class="tabbtn" data-tab="swap">Swap Cámara</button>
   <button class="tabbtn" data-tab="colombia">Saldos Fwd USDCOP</button>
 </nav>
@@ -743,6 +744,125 @@ window.JGPLazy = (function () {
             fecharia. A janela de cada tabela está no subtítulo dela.
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ VENDAS HACIENDA ══════════════════ -->
+    <div id="tab-hacienda" class="tab">
+      <div class="note note-flush">
+        <b>O que esta aba tenta responder.</b> A Hacienda vende dólares para converter em pesos a
+        receita do cobre e a captação externa. Até maio/2026 ela divulgava os leilões e o valor
+        vendido; desde então vende direto com contrapartes aprovadas e não publica nada. O BCCh
+        também não publica essa venda em lugar nenhum do BDE: as contrapartidas de reservas e de
+        base monetária do governo central (<code>F051.H821</code>, <code>H612</code>,
+        <code>H921</code>) estão em zero desde 2020, porque a venda não passa pelo BCCh.
+        <br>
+        O que sobra é o <b>spot USD-CLP dos bancos residentes com &ldquo;otros sectores&rdquo;</b>
+        (<code>F099.SPT.FLU.Z.40.R.50.*.CLPUSD</code>, diário), onde o Fisco aparece misturado com
+        outras entidades. Tudo aqui é <b>estimativa por proxy, não medida</b>.
+        <br>
+        <b>Sinal desta aba: o cru do BCCh.</b> Acima de zero = <b>otros vendendo USD</b>, o lado em
+        que a Hacienda aparece. É o oposto da convenção compra-de-USD das abas de setores, de
+        propósito: aqui a pergunta é quanto ela vendeu.
+      </div>
+
+      <h2>Leitura da última semana</h2>
+      {{ hac_resumo | safe }}
+
+      <h2>Alta frequência: o dia a dia</h2>
+      <p class="sub">O <b>neto</b> é compras menos vendas dos bancos com otros: quando a Hacienda
+        vende, ele sobe. A <b>régua</b> é o que otros produz <b>sem</b> Hacienda: a distribuição
+        diária do neto nos meses em que a venda divulgada foi zero (abr e mai/24, abr/25, nov e
+        dez/25). O tracejado cinza é o p95 dessa régua: um mês sem venda passa dele <b>um dia em
+        vinte</b>. Barra vermelha é dia acima dele; dois seguidos são o que a régua quase nunca
+        produz. O pontilhado vermelho é o ritmo anunciado (US$ 600 mi por semana = 120 por pregão).</p>
+      <div class="grid-wide">
+        <div class="card">{{ hac_neto_diario | safe }}</div>
+        <div class="card">{{ hac_tabela_diaria | safe }}</div>
+      </div>
+      <p class="sub">A mesma leitura em janela de <b>5 pregões rolantes</b>, contra a faixa p5&ndash;p95
+        das janelas de 5 pregões inteiramente dentro de meses sem venda. Suaviza o ruído de um dia
+        isolado, mas responde mais devagar: uma venda que começa na terça só tira a linha da faixa
+        dois ou três pregões depois.</p>
+      <div class="card">{{ hac_rolante | safe }}</div>
+      <p class="sub">O lado <b>bruto</b>, que é a série do método do Itaú: só as compras dos bancos
+        junto a otros, sem descontar as vendas. Tem mais ruído que o neto, porque carrega o giro de
+        todos os outros agentes de otros, mas é bom para conferir que o salto do neto veio de
+        <b>venda nova</b> e não de compra que deixou de existir.</p>
+      <div class="card">{{ hac_compras_diario | safe }}</div>
+
+      <h2>Semana a semana</h2>
+      <p class="sub">Venda estimada por semana de calendário: <b>neto da semana + base &times; pregões</b>
+        (o estimador está explicado abaixo). Semana vermelha teve pelo menos um dia acima da régua;
+        a última, clara, ainda está incompleta &mdash; o BCCh publica com 2 a 3 dias úteis de atraso.
+        Compare com o pontilhado do ritmo anunciado, proporcional aos pregões que já saíram.</p>
+      <div class="grid-wide">
+        <div class="card">{{ hac_semanal | safe }}</div>
+        <div class="card">{{ hac_tabela_semanal | safe }}</div>
+      </div>
+
+      <h2>Mês a mês: efetivo e estimado</h2>
+      <p class="sub">Barras verdes são a venda <b>divulgada</b> pela Hacienda (planilha do time,
+        até maio/2026). As duas linhas são os estimadores, calculados também nos meses com dado para
+        dar para ver onde cada um erra. A faixa cinza é o período sem divulgação.</p>
+      <div class="grid-wide">
+        <div class="card">{{ hac_mensal | safe }}</div>
+        <div class="card">{{ hac_tabela_mensal | safe }}</div>
+      </div>
+
+      <h2>Como a estimativa é feita, passo a passo</h2>
+      <div class="note note-flush">
+        <b>1. A série.</b> O BCCh publica o spot USD-CLP dos bancos residentes aberto por
+        contraparte: fundos de pensão, seguradoras, empresas do setor real, corretoras, AGFs, não
+        residentes e <b>otros sectores</b>. Para cada uma há <b>compras</b> (o banco comprou USD do
+        cliente, ou seja, o cliente <b>vendeu</b>), <b>vendas</b> e <b>neto</b> = compras &minus;
+        vendas. A Hacienda vende por intermédio dos bancos, então cai em compras de otros. Que
+        &ldquo;compras&rdquo; é na ótica do banco foi inferido dos dados &mdash; o neto sobe nos meses
+        de venda forte &mdash; e não de nota metodológica do BCCh.
+        <br><br>
+        <b>2. O histórico.</b> Uma tabela mensal com a venda divulgada (planilha do time) ao lado da
+        soma dos diários de otros, de jan/2022 (início da série diária) até maio/2026.
+        <br><br>
+        <b>3. Estimador de razão (o do Itaú).</b> Divide a venda pelas compras de otros: no
+        histórico inteiro dá ~23%, na mediana dos meses com venda ~25% (o número que o Itaú cita) e
+        de jan/25 a mai/26, a janela de calibração usada aqui, ~20%. A estimativa é
+        <code>razão &times; compras</code>. Funciona para o <b>total de um período</b>; no dia a dia
+        é cego, porque paga razão &times; compras até em mês sem venda nenhuma (abr/25, nov e dez/25
+        tiveram compras de US$ 2,6 a 4,2 bi e venda zero).
+        <br><br>
+        <b>4. Estimador neto + base.</b> Usa o neto, que já desconta as compras e vendas dos outros
+        agentes de otros. O que sobra de viés é que esses outros, em média, foram
+        <b>compradores líquidos</b> desde 2025 &mdash; cerca de US$ 25 mi por pregão, ~US$ 500 mi por
+        mês, medido como <code>soma(venda &minus; neto) / pregões</code> na calibração. A estimativa
+        é <code>neto + base &times; pregões</code>. É o que serve para semana e dia.
+        <br><br>
+        <b>5. A régua.</b> Para dizer &ldquo;essa semana teve venda&rdquo; sem depender de nenhum
+        estimador: a distribuição do neto nos dias de meses com venda divulgada zero, desde 2024. O
+        p95 diário (e a faixa p5&ndash;p95 em 5 pregões) é o que otros produz sozinho. Acima disso é
+        evidência, não prova.
+        <br><br>
+        <b>6. Aplicar ao apagão.</b> Os dois estimadores rodam nos meses sem divulgação; o total do
+        período está nos KPIs do topo e na última linha da tabela mensal. Como comparação, o Itaú
+        chegou a ~US$ 3 bi para jun&ndash;set e a Scotia a US$ 4,2 bi.
+      </div>
+      <div class="card">{{ hac_calib | safe }}</div>
+
+      <div class="note">
+        <b>Cuidados de leitura.</b>
+        <b>(i)</b> Otros não é só o Fisco: o Itaú cita governo, Banco Central, famílias e outras
+        entidades. Um dia isolado acima da régua pode ser uma operação grande de outro agente &mdash;
+        por isso a leitura forte pede dois dias, ou a janela de 5 pregões fora da faixa.
+        <b>(ii)</b> Um mês isolado erra muito: na calibração, o erro mensal do neto + base tem
+        desvio-padrão de ~US$ 400 mi (o da razão, ~US$ 490 mi). O estimador vale para períodos de alguns meses e para o sinal semanal, não para
+        cravar o valor de julho.
+        <b>(iii)</b> A calibração supõe que o comportamento dos outros agentes de otros não mudou.
+        Se eles passarem a comprar mais USD, o neto + base subestima a Hacienda.
+        <b>(iv)</b> O diário do BCCh é referencial e sai com 2 a 3 dias úteis de atraso; a cauda pode
+        ser revisada. A tabela mensal soma os diários, para o mensal e o diário falarem a mesma
+        língua.
+        <b>(v)</b> A venda divulgada vem da aba &ldquo;Vendas Hacienda&rdquo; do
+        <code>reservas.xlsx</code> do time; sem o drive R:, o build usa o cache versionado
+        <code>data/hacienda_vendas.csv</code>.
       </div>
     </div>
 

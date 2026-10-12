@@ -274,3 +274,42 @@ def make_prazo_table(
         <tbody>{"".join(linhas)}</tbody>
     </table>
     """
+
+
+def make_hacienda_table(
+    tab: pd.DataFrame, titulo: str, subtitulo: str,
+    colunas: list[tuple[str, str]], rotulo_linha: str,
+    sinal: str | None = None,
+) -> str:
+    """Tabela da aba da Hacienda: uma linha por dia, semana ou mes.
+
+    `colunas` sao pares (chave no df, rotulo); valores sem decimal, com sinal.
+    `sinal` nomeia uma coluna booleana: a linha marcada sai com a celula de
+    rotulo tingida de vermelho (acima da regua / provavel venda). Linha cujo
+    indice comeca com "TOTAL" vira agregado, como nas outras tabelas do painel.
+    """
+    if tab.empty:
+        return "<p>—</p>"
+    linhas = []
+    for idx, row in tab.iterrows():
+        agg = str(idx).startswith("TOTAL")
+        cls = " class='row-agg'" if agg else ""
+        marca = bool(sinal and row.get(sinal))
+        tinta = " style='background:rgba(230,57,70,.22)'" if marca else ""
+        cells = [f"<td class='row-label'{tinta}>{idx}</td>"]
+        for c, _ in colunas:
+            v = row.get(c)
+            txt = "—" if v is None or pd.isna(v) else (
+                v if isinstance(v, str) else f"{float(v):+,.0f}"
+            )
+            cells.append(f"<td class='num'>{txt}</td>")
+        linhas.append(f"<tr{cls}>" + "".join(cells) + "</tr>")
+    cab = "".join(f"<th>{rot}</th>" for _, rot in colunas)
+    return f"""
+    <div class="table-title">{titulo}</div>
+    <div class="table-subtitle">{subtitulo}</div>
+    <table class="data-table">
+        <thead><tr><th>{rotulo_linha}</th>{cab}</tr></thead>
+        <tbody>{"".join(linhas)}</tbody>
+    </table>
+    """
