@@ -300,7 +300,8 @@ def make_hacienda_table(
         for c, _ in colunas:
             v = row.get(c)
             txt = "—" if v is None or pd.isna(v) else (
-                v if isinstance(v, str) else f"{float(v):+,.0f}"
+                v if isinstance(v, str)
+                else f"{float(v) + 0.0:+,.0f}".replace(",", ".")   # pt-BR: 1.408
             )
             cells.append(f"<td class='num'>{txt}</td>")
         linhas.append(f"<tr{cls}>" + "".join(cells) + "</tr>")

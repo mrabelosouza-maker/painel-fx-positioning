@@ -57,14 +57,18 @@ def test_regua_so_com_meses_de_venda_zero(hacienda):
     assert [t.strftime("%Y-%m") for t in h["regua"]["meses"]] == ["2024-04", "2024-05"]
 
 
-def test_estimadores_fecham_a_conta(hacienda):
-    h, _, _ = hacienda
+def test_estimador_fecha_a_conta_e_sinal_compra_usd(hacienda):
+    h, d, efetivo = hacienda
     m, c = h["mensal"], h["calib"]
     cal = m.loc[c["inicio"]:c["fim"]].dropna(subset=["efetivo"])
-    # Razao: na janela de calibracao, a soma estimada bate a soma efetiva.
-    assert cal["est_razao"].sum() == pytest.approx(cal["efetivo"].sum())
-    # Neto + base: idem, por construcao da base por pregao.
-    assert cal["est_neto"].sum() == pytest.approx(cal["efetivo"].sum())
+    # Razao: na janela de calibracao, a soma estimada bate a soma divulgada.
+    assert cal["est"].sum() == pytest.approx(cal["efetivo"].sum())
+    # Convencao do painel: venda de USD e negativa, razao positiva.
+    assert (m["efetivo"].dropna() <= 0).all()
+    assert (h["diario"]["venda"] <= 0).all()
+    assert c["razao"] > 0
+    # neto em compra-de-USD = o oposto do neto cru do banco.
+    assert h["diario"]["neto"].iloc[0] == pytest.approx(-d["neto"].iloc[0])
 
 
 def test_semana_parcial_so_na_ultima(hacienda):

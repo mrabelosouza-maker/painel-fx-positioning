@@ -1034,88 +1034,85 @@ def load_hacienda_mensal() -> pd.Series:
 
 
 def build_hacienda() -> dict:
-    """Tudo o que a aba de vendas da Hacienda desenha.
+    """Tudo o que a aba de vendas da Hacienda desenha, em COMPRA-DE-USD.
 
-    Dois estimadores, calibrados contra a venda divulgada desde
-    HACIENDA_CALIB_INICIO ate HACIENDA_ULTIMO_DIVULGADO:
+    Convencao do painel: positivo = compra de USD, negativo = venda de USD. O
+    BCCh publica na otica do banco residente, entao tudo entra invertido aqui, na
+    entrada, e a aba nunca ve o sinal cru:
 
-      - razao (o do Itau): venda = r x compras de otros, com r = soma das vendas
-        / soma das compras na calibracao. Bom para o total de um periodo longo;
-        cego no dia a dia, porque paga r x compras ate em mes sem venda.
-      - neto + base: venda = neto de otros + b por pregao, com b = o quanto os
-        demais agentes de otros compraram em media (soma de venda - neto, por
-        pregao). E o que serve no dia a dia: o neto ja desconta as compras e
-        vendas dos outros, e a base corrige o vies que sobra.
+      venda  = -compras do banco  (otros vendendo USD ao banco; <= 0)
+      compra = +ventas do banco   (otros comprando USD do banco; >= 0)
+      neto   = compra + venda     (= -neto cru)
+      efetivo = -venda divulgada  (a Hacienda vende: <= 0)
 
-    E a regua "sem Hacienda": a distribuicao do neto nos meses de venda
-    divulgada zero desde HACIENDA_REGUA_INICIO. Dia ou janela acima do p95 dela
-    e o que um mes sem Hacienda raramente produz.
+    Estimador unico, o do Itau: venda da Hacienda = r x venda de otros, com
+    r = soma da venda divulgada / soma da venda de otros na calibracao
+    (HACIENDA_CALIB_INICIO a HACIENDA_ULTIMO_DIVULGADO). Bom para o total de um
+    periodo; no dia a dia e cego, porque atribui r x venda ate em mes sem venda.
+
+    Por isso a aba leva tambem a regua "sem Hacienda": a distribuicao diaria de
+    venda e de neto nos meses de venda divulgada zero desde
+    HACIENDA_REGUA_INICIO. Dia abaixo do p5 dela (a cauda vendedora) e o que um
+    mes sem venda produz um dia em vinte. A regua nao estima; diz se houve sinal.
     """
-    d = fetch_otros_spot()
-    if d.empty:
+    cru = fetch_otros_spot()
+    if cru.empty:
         return {}
-    efetivo = load_hacienda_mensal()
+    d = pd.DataFrame({
+        "venda": -cru["compras"] + 0.0,
+        "compra": cru["ventas"] + 0.0,
+        "neto": -cru["neto"] + 0.0,
+    }, index=cru.index)
+    efetivo = -load_hacienda_mensal() + 0.0   # + 0.0: sem "-0" nas tabelas
 
-    d = d.copy()
     d["mes"] = d.index.to_period("M").to_timestamp()
-    d["neto5"] = d["neto"].rolling(5).sum()
 
     # ── Mensal: soma dos diarios, para o mensal e o diario falarem a mesma lingua
     m = d.groupby("mes").agg(
-        compras=("compras", "sum"), ventas=("ventas", "sum"),
+        venda=("venda", "sum"), compra=("compra", "sum"),
         neto=("neto", "sum"), pregoes=("neto", "size"),
     )
     m["efetivo"] = efetivo.reindex(m.index)
 
     cal = m.loc[HACIENDA_CALIB_INICIO:HACIENDA_ULTIMO_DIVULGADO].dropna(subset=["efetivo"])
-    razao = cal["efetivo"].sum() / cal["compras"].sum()
-    base = (cal["efetivo"] - cal["neto"]).sum() / cal["pregoes"].sum()
-    m["est_razao"] = razao * m["compras"]
-    m["est_neto"] = m["neto"] + base * m["pregoes"]
+    razao = cal["efetivo"].sum() / cal["venda"].sum()
+    m["est"] = razao * m["venda"]
 
     hist = m.dropna(subset=["efetivo"])
-    com_venda = hist[hist["efetivo"] > 0]
+    com_venda = hist[hist["efetivo"] < 0]
     calib = {
         "razao": razao,
-        "base": base,
         "inicio": pd.Timestamp(HACIENDA_CALIB_INICIO + "-01"),
         "fim": pd.Timestamp(HACIENDA_ULTIMO_DIVULGADO + "-01"),
-        "razao_hist": hist["efetivo"].sum() / hist["compras"].sum(),
-        "razao_mediana": (com_venda["efetivo"] / com_venda["compras"]).median(),
-        "corr_neto": hist["efetivo"].corr(hist["neto"]),
-        "corr_compras": hist["efetivo"].corr(hist["compras"]),
-        "hist_inicio": hist.index.min(),
+        "razao_hist": hist["efetivo"].sum() / hist["venda"].sum(),
+        "razao_mediana": (com_venda["efetivo"] / com_venda["venda"]).median(),
+        "corr": hist["efetivo"].corr(hist["venda"]),
+        "erro_dp": (cal["efetivo"] - razao * cal["venda"]).std(),
     }
 
-    # ── Regua sem Hacienda. Janela de 5 so conta se os 5 pregoes cairem em mes
-    # sem venda: a que atravessa a virada de um mes com venda nao e "sem".
+    # ── Regua sem Hacienda: a cauda VENDEDORA (p5) dos meses de venda zero
     zero = m.index[(m["efetivo"] == 0) & (m.index >= HACIENDA_REGUA_INICIO)]
     em_zero = d["mes"].isin(zero)
-    d5_ok = em_zero.astype(int).rolling(5).sum() == 5
     regua = {
         "meses": list(zero),
         "n_dias": int(em_zero.sum()),
-        "neto_p95": d.loc[em_zero, "neto"].quantile(0.95),
-        "compras_p95": d.loc[em_zero, "compras"].quantile(0.95),
-        "neto5_p05": d.loc[d5_ok, "neto5"].quantile(0.05),
-        "neto5_p95": d.loc[d5_ok, "neto5"].quantile(0.95),
+        "neto_p05": d.loc[em_zero, "neto"].quantile(0.05),
+        "venda_p05": d.loc[em_zero, "venda"].quantile(0.05),
     }
+    d["sinal_venda"] = d["venda"] < regua["venda_p05"]
+    d["sinal_neto"] = d["neto"] < regua["neto_p05"]
+    d["est"] = razao * d["venda"]
 
-    d["acima"] = d["neto"] > regua["neto_p95"]
-    d["est"] = d["neto"] + base
-
-    # ── Semana de calendario (seg-sex). Aqui sim calendario, e nao blocos de 5
-    # pregoes: o programa anunciado e "por semana", e a pergunta e "a semana
-    # passada teve venda?". A ultima semana pode estar incompleta.
+    # ── Semana de calendario (seg-sex): o programa anunciado e "por semana" e a
+    # pergunta e "a semana passada teve venda?". A ultima pode estar incompleta.
     sem = d.groupby(d.index.to_period("W-FRI")).agg(
         ate=("neto", lambda x: x.index.max()),
-        pregoes=("neto", "size"), compras=("compras", "sum"),
-        neto=("neto", "sum"), acima=("acima", "sum"),
+        pregoes=("neto", "size"), venda=("venda", "sum"), neto=("neto", "sum"),
+        sinal_venda=("sinal_venda", "sum"), sinal_neto=("sinal_neto", "sum"),
     )
-    sem["est"] = sem["neto"] + base * sem["pregoes"]
+    sem["est"] = razao * sem["venda"]
     sem["fim_semana"] = [p.end_time.normalize() for p in sem.index]
-    sem["parcial"] = sem["ate"] < sem["fim_semana"]
-    sem["parcial"] &= sem.index == sem.index.max()
+    sem["parcial"] = (sem["ate"] < sem["fim_semana"]) & (sem.index == sem.index.max())
     sem = sem.reset_index(drop=True)
 
     return {
