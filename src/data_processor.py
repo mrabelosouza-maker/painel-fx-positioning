@@ -29,6 +29,7 @@ from config import (
     CODIGO_CAMBIO,
     DURATIONS,
     OFFSHORE_ADJ_CUTOVER,
+    OFFSHORE_ADJ_SPOT_BASE,
     OFFSHORE_WEEKLY_SESSIONS,
     SERIES_BANCOS,
     SERIES_FX_ALL,
@@ -298,9 +299,11 @@ def build_swap_data() -> dict:
 def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
     """Constroi serie de offshore ajustado.
 
-    Antes do cutover (OFFSHORE_ADJ_CUTOVER): posicao offshore original
-    (No residentes). A partir do cutover: offshore original + soma acumulada
-    do spot liquido de nao residentes, que comeca a acumular na data do cutover.
+    Ver o comentario de OFFSHORE_ADJ_CUTOVER no config. Antes do cutover:
+    posicao offshore original (No residentes). A partir dele: offshore
+    original + estoque de basis, o acumulado do spot liquido de nao
+    residentes menos OFFSHORE_ADJ_SPOT_BASE por pregao — so a venda acima do
+    ritmo normal conta como basis trade.
 
     Retorna DataFrame com Data, Offshore_Adj, USDCLP.
     """
@@ -319,10 +322,13 @@ def build_offshore_adjusted(dados: pd.DataFrame) -> pd.DataFrame:
     result = result.merge(spot_df, on="Data", how="left")
     result["spot_neto"] = result["spot_neto"].fillna(0.0)
 
-    # Soma acumulada do spot a partir do cutover
+    # Estoque de basis: soma acumulada do excesso de spot a partir do cutover.
+    # Sinal cru do BCCh: spot_neto > 0 = offshore vendendo USD.
     result["spot_cumsum"] = 0.0
     mask = result["Data"] >= cutover
-    result.loc[mask, "spot_cumsum"] = result.loc[mask, "spot_neto"].cumsum()
+    result.loc[mask, "spot_cumsum"] = (
+        result.loc[mask, "spot_neto"] - OFFSHORE_ADJ_SPOT_BASE
+    ).cumsum()
 
     # Offshore ajustado
     result["Offshore_Adj"] = result["No residentes"].copy()
@@ -352,7 +358,9 @@ def build_weekly_legs(
 
       ndf_wk  : variacao do saldo de NDF de ponta a ponta do bloco
       bcch_wk : soma do fluxo spot liquido no bloco
-      net_wk  : soma das duas = variacao da posicao ajustada no bloco
+      net_wk  : soma das duas. Difere da variacao do Offshore_Adj no bloco em
+                5 x OFFSHORE_ADJ_SPOT_BASE: as pernas mostram o fluxo observado,
+                sem o desconto do ritmo normal de venda spot
     """
     d = adj_df.dropna(subset=["No residentes"]).set_index("Data").sort_index()
     n = len(d)

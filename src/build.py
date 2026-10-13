@@ -290,7 +290,7 @@ def build_offshore_adj_section(dados):
 
     # Dual-axis: Offshore Ajustado vs USDCLP (eixo direito NAO invertido, porque
     # na convencao compra-de-USD as duas series andam no mesmo sentido). Abre em
-    # jan/2025 com os dois eixos padronizados na janela visivel, o que faz as
+    # OFFSHORE_ADJ_DEFAULT_START (o cutover) com os dois eixos padronizados na janela visivel, o que faz as
     # linhas andarem quase um pra um; o JS refaz essa conta quando o usuario
     # expande a janela, ate a amostra toda.
     ctx["offadj_chart"] = make_dual_axis_chart(

@@ -110,9 +110,18 @@ TENOR_DURATION_MAP = {
 # Offshore Ajustado
 # ──────────────────────────────────────────────────────────────────────
 SERIES_SPOT_NR_NETO = "F099.SPT.FLU.Z.40.N.NR.NET.Z.MMUSD.MLME.Z.Z.0.D"
-OFFSHORE_ADJ_CUTOVER = "2025-12-15"  # a partir desta data, soma spot acumulado
-# 15-dez-2025 = 1o dia util apos o 2o turno, mesma ancora do Santander.
-# Trocar a ancora e um deslocamento aditivo puro: muda o nivel, nao a forma nem o z-score.
+# O ajustado e o NDF oficial menos o estoque estimado de basis trades (venda de
+# USD no spot, compra de papel curto em CLP, hedge com compra de USD no NDF). O
+# estoque e o acumulado do EXCESSO de venda spot do offshore sobre um ritmo
+# normal, desde a ancora:
+#
+#   estoque_basis(t) = soma desde OFFSHORE_ADJ_CUTOVER de (venda spot NR - OFFSHORE_ADJ_SPOT_BASE)
+#
+# Ate 13-out-2026 a conta usava ancora em 15-dez-2025 e o spot cheio (sem
+# desconto). Isso deixava de fora ~3,4 bi de venda spot de 27-out a 12-dez e
+# descontava ~2,4 bi/ano a mais. Ver specs/2026-10-13-offshore-ajustado-basis.md.
+OFFSHORE_ADJ_CUTOVER = "2025-10-27"  # a partir desta data, acumula o excesso de spot
+OFFSHORE_ADJ_SPOT_BASE = 10.0  # USD mn/dia de venda spot "normal" do offshore, fora do basis
 
 # Janela em que o grafico de nivel vs USDCLP abre. Nao corta a amostra: o dado
 # inteiro vai para o grafico e o zoom (ou duplo-clique) devolve a serie toda.
@@ -314,8 +323,7 @@ OFFSHORE_PRAZO_DELTA_SESSOES = 5
 # baldes tem sinal misto e area empilhada do Plotly nao lida bem com isso — foi
 # o que desfez o commit 9fb6099 na aba de setores.
 #
-# 190 pregoes alcancam dez/2025, a mesma ancora de OFFSHORE_ADJ_CUTOVER (o 1o
-# dia util apos o 2o turno). Contado em pregao e nao fixado na data de proposito:
+# 190 pregoes alcancam dez/2025 (o 1o dia util apos o 2o turno). Contado em pregao e nao fixado na data de proposito:
 # ancora fixa faria o custo crescer ~6.750 retangulos por ano e estourar o teto
 # da pagina sozinha, sem ninguem ter feito nada.
 OFFSHORE_PRAZO_HISTORICO = 190
