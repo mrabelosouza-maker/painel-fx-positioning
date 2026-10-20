@@ -316,8 +316,11 @@
 
     <!-- ══════════════════ VENDAS HACIENDA ══════════════════ -->
     <div id="tab-hacienda" class="tab">
-      <p class="lead">A Hacienda parou de divulgar as vendas de USD no fim de maio/2026.
-        Seguimos os passos do Itaú para reconstruir a série a partir do BCCh, que publica
+      <p class="lead">A Hacienda parou de divulgar o leilão de USD no fim de maio/2026 e, em
+        outubro/2026, passou a publicar na DIPRES o <b>Resultado de Liquidaciones Bilaterales</b>:
+        a venda diária do Tesoro Público, em USD e com o preço médio. Essa série oficial abre a aba.
+        Para o período sem divulgação (jun a set/2026) e para os dias que a DIPRES ainda não
+        publicou, seguimos os passos do Itaú para reconstruir a série a partir do BCCh, que publica
         diariamente o spot dos bancos com a contraparte <b>otros sectores</b>. A Hacienda vende por
         meio dos bancos e aparece ali, mas otros também inclui outras entidades (governo, famílias e
         outros agentes), por isso a incerteza é grande. Por simplificação, usamos a proporção
@@ -327,7 +330,20 @@
       <p class="sub">Convenção do painel: <b>+ compra de USD, − venda de USD</b>. A venda da
         Hacienda aparece negativa.</p>
 
-      <h2>Leitura da última semana</h2>
+      <h2>Venda oficial: liquidaciones bilaterales (DIPRES)</h2>
+      <p class="sub">A venda divulgada pela Hacienda, dia a dia, contra o USDCLP de fechamento. O
+        losango é o preço médio a que o Tesoro vendeu no dia: abaixo da linha, vendeu mais barato que
+        o fechamento. A coluna <b>Hacienda (est.)</b> das tabelas é a proxy do Itaú pelo spot de otros
+        (seções abaixo), para comparar com o dado oficial.</p>
+      {{ hac_of_resumo | safe }}
+      <div class="card">{{ hac_of_diario | safe }}</div>
+      <div class="card">{{ hac_of_acum | safe }}</div>
+      <div class="grid2">
+        <div class="card">{{ hac_of_tabela_diaria | safe }}</div>
+        <div class="card">{{ hac_of_tabela_semanal | safe }}</div>
+      </div>
+
+      <h2>Proxy pelo spot de otros: leitura da última semana</h2>
       {{ hac_resumo | safe }}
 
       <h2>Alta frequência: estão vendendo agora?</h2>
@@ -376,7 +392,9 @@
         Fisco: governo, Banco Central, famílias e outras entidades estão ali. <b>(iv)</b> O diário do
         BCCh é referencial e sai com 2 a 3 dias úteis de atraso. <b>(v)</b> A venda divulgada vem da
         aba &ldquo;Vendas Hacienda&rdquo; do <code>reservas.xlsx</code>; sem o drive R:, o build
-        usa o cache <code>data/hacienda_vendas.csv</code>.
+        usa o cache <code>data/hacienda_vendas.csv</code>. <b>(vi)</b> A venda oficial diária vem
+        da planilha de liquidaciones bilaterales da DIPRES, que só traz o mês corrente; o build a
+        acumula em <code>data/hacienda_liquidaciones.csv</code>.
       </div>
     </div>
 

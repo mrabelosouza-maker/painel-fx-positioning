@@ -275,3 +275,25 @@ def fetch_colombia_forwards() -> pd.DataFrame:
     except Exception as e2:
         logger.error("Fallback local tambem falhou: %s", e2)
         return pd.DataFrame()
+
+
+# ──────────────────────────────────────────────────────────────────────
+# DIPRES: Resultado de Liquidaciones Bilaterales (venda de USD do Tesoro)
+# ──────────────────────────────────────────────────────────────────────
+def fetch_dipres_liquidaciones() -> bytes | None:
+    """Baixa a planilha de liquidaciones bilaterales da DIPRES (mes corrente).
+
+    O site recusa cliente sem User-Agent de navegador. None se falhar: quem chama
+    cai no cache.
+    """
+    from config import HACIENDA_LB_URL
+    try:
+        resp = _session.get(HACIENDA_LB_URL, timeout=60,
+                            headers={"User-Agent": "Mozilla/5.0"})
+        resp.raise_for_status()
+        if not resp.content.startswith(b"PK"):   # xlsx e zip; HTML de erro nao e
+            raise ValueError(f"resposta nao e xlsx ({resp.headers.get('Content-Type')})")
+        return resp.content
+    except Exception as e:
+        logger.warning("Download DIPRES liquidaciones falhou: %s", e)
+        return None

@@ -1253,3 +1253,88 @@ def make_hacienda_mensal(m: pd.DataFrame, fim_divulgado: pd.Timestamp, height: i
     _hac_layout(fig, height, bargap=0.25, barmode="overlay")
     fig.update_xaxes(tickformat="%m/%y", dtick="M2")
     return _hac_html(fig)
+
+
+# ── Venda OFICIAL (DIPRES, liquidaciones bilaterales) contra o USDCLP ──
+# Eixo esquerdo = venda (negativa, para baixo), direito = USDCLP. As duas
+# escalas sao empurradas para metades diferentes do painel (barras embaixo,
+# cambio em cima) para uma nao pintar por cima da outra.
+HAC_USDCLP = JGP_PRETO
+
+
+def _hac_eixo_usdclp(fig: go.Figure, s: pd.Series, em_cima: bool) -> None:
+    lo, hi = float(s.min()), float(s.max())
+    amp = max(hi - lo, 1.0)
+    faixa = [lo - 1.3 * amp, hi + 0.1 * amp] if em_cima else [lo - 0.1 * amp, hi + 0.1 * amp]
+    fig.update_layout(yaxis2=dict(
+        overlaying="y", side="right", showgrid=False, zeroline=False, range=faixa,
+        linecolor="#000000", linewidth=1, ticks="outside", ticklen=3,
+        tickfont=dict(size=11, color=HAC_INK), tickformat=",.0f", title=None,
+    ))
+
+
+def make_hacienda_oficial_diario(d: pd.DataFrame, height: int = 420) -> str:
+    """Venda oficial por pregao (barras) + USDCLP de fechamento e preco medio da
+    venda (losango), os dois no eixo direito. `d`: indice = pregao, colunas
+    oficial (<= 0, NaN antes do programa), preco e usdclp."""
+    if d.empty or d["oficial"].isna().all():
+        return "<p>Dados indisponíveis</p>"
+    x = d.index.strftime("%Y-%m-%d")
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=x, y=d["oficial"], name="venda oficial (eixo esq.)",
+        marker=dict(color=HAC_REALIZADO, cornerradius=3),
+        hovertemplate="venda: %{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=d["usdclp"], name="USDCLP fechamento (eixo dir.)", yaxis="y2",
+        mode="lines", line=dict(color=HAC_USDCLP, width=2), connectgaps=True,
+        hovertemplate="USDCLP: %{y:,.2f}<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=d["preco"], name="preço médio da venda (eixo dir.)", yaxis="y2",
+        mode="markers", marker=dict(color=HAC_REALIZADO, size=8, symbol="diamond",
+                                    line=dict(color=HAC_INK, width=1)),
+        hovertemplate="preço médio: %{y:,.2f}<extra></extra>",
+    ))
+    for xi, v in zip(x, d["oficial"]):
+        if pd.notna(v) and v < 0:
+            fig.add_annotation(x=xi, y=v, text=_br(v), showarrow=False, yanchor="top",
+                               yshift=-2, font=dict(size=10, color=HAC_INK))
+    _hac_layout(fig, height, pregoes=True, bargap=0.25)
+    fig.update_layout(hovermode="x unified")
+    mn = float(d["oficial"].min())
+    fig.update_layout(yaxis_range=[1.25 * mn, 0.9 * abs(mn)])
+    _hac_eixo_usdclp(fig, pd.concat([d["usdclp"], d["preco"]]).dropna(), em_cima=True)
+    return _hac_html(fig)
+
+
+def make_hacienda_oficial_acum(d: pd.DataFrame, height: int = 400) -> str:
+    """Venda oficial ACUMULADA desde o inicio do programa (area, eixo esq.) contra
+    o USDCLP (eixo dir.)."""
+    if d.empty or d["acum"].isna().all():
+        return "<p>Dados indisponíveis</p>"
+    x = d.index.strftime("%Y-%m-%d")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x, y=d["acum"], name="venda oficial acumulada (eixo esq.)",
+        mode="lines+markers", line=dict(color=HAC_REALIZADO, width=2),
+        marker=dict(size=5),
+        fill="tozeroy", fillcolor="rgba(0,176,80,0.18)",
+        hovertemplate="acumulado: %{y:+,.0f} mm USD<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=d["usdclp"], name="USDCLP fechamento (eixo dir.)", yaxis="y2",
+        mode="lines", line=dict(color=HAC_USDCLP, width=2), connectgaps=True,
+        hovertemplate="USDCLP: %{y:,.2f}<extra></extra>",
+    ))
+    ult = d["acum"].dropna()
+    fig.add_annotation(x=x[d.index.get_loc(ult.index[-1])], y=ult.iloc[-1],
+                       text=f"<b>{_br(ult.iloc[-1])}</b>", showarrow=False,
+                       xanchor="right", yanchor="top", yshift=-3,
+                       font=dict(size=11, color=HAC_INK))
+    _hac_layout(fig, height, pregoes=True)
+    mn = float(ult.min())
+    fig.update_layout(yaxis_range=[1.2 * mn, 0.15 * abs(mn)])
+    _hac_eixo_usdclp(fig, d["usdclp"].dropna(), em_cima=False)
+    return _hac_html(fig)

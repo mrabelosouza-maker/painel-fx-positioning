@@ -24,6 +24,7 @@ from config import (
     OFFSHORE_PRAZO_FLUXO_SESSOES,
     HACIENDA_RITMO_SEMANAL, HACIENDA_HIST_DIARIO, HACIENDA_HIST_SEMANAS,
     HACIENDA_HIST_MENSAL_INICIO, HACIENDA_TABELA_MESES, HACIENDA_HIST_SEMANAL_INICIO,
+    HACIENDA_LB_INICIO,
 )
 from data_processor import (
     build_fx_dados, compute_deltas, build_swap_data, build_colombia_data,
@@ -35,8 +36,9 @@ from data_processor import (
     build_afp_rolling_legs, build_afp_levels,
     build_offshore_prazo, agrega_prazo, build_prazo_rolling,
     build_prazo_tabela_estoque, build_prazo_tabela_fluxo,
-    build_hacienda,
+    build_hacienda, load_hacienda_liquidaciones,
 )
+from data_fetcher import fetch_usdclp_closing
 from chart_builder import (
     make_line_chart,
     make_bar_chart,
@@ -58,6 +60,8 @@ from chart_builder import (
     make_hacienda_pregoes,
     make_hacienda_semanas,
     make_hacienda_mensal,
+    make_hacienda_oficial_diario,
+    make_hacienda_oficial_acum,
     jgp_card,
     _br,
 )
@@ -555,6 +559,8 @@ _MES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun",
               "jul", "ago", "set", "out", "nov", "dez"]
 _FONTE_HAC = ("Fonte: BCCh, spot USD-CLP dos bancos residentes com otros sectores "
               "(F099.SPT.FLU.Z.40.R.50); Hacienda; elaboração JGP.")
+_FONTE_LB = ("Fonte: DIPRES, Resultado de Liquidaciones Bilaterales (Tesoro Público); "
+             "Bloomberg (USDCLP); elaboração JGP.")
 
 
 def _mes_rotulo(t) -> str:
@@ -610,6 +616,140 @@ def _hacienda_resumo(h: dict) -> str:
     ]) + "</div>"
 
 
+def _kpi(k, v, desc):
+    return (f'<div class="kpi"><div class="k">{k}</div><div class="v">{v}</div>'
+            f'<div class="d">{desc}</div></div>')
+
+
+def _num(v, fmt=",.2f"):
+    return f"{v:{fmt}}" if pd.notna(v) else "—"
+
+
+def build_hacienda_oficial(h: dict) -> dict:
+    """Venda OFICIAL da DIPRES (liquidaciones bilaterales) contra o USDCLP.
+
+    Independe do spot de otros: se o BCCh cair, esta parte continua de pe (so
+    perde a coluna de comparacao com a estimativa do Itau).
+    """
+    chaves = ["hac_of_resumo", "hac_of_diario", "hac_of_acum",
+              "hac_of_tabela_diaria", "hac_of_tabela_semanal"]
+    lb = load_hacienda_liquidaciones()
+    if lb.empty:
+        return {k: "<p>Venda oficial da DIPRES indisponível</p>" for k in chaves}
+    lb = lb.sort_index()
+    # Fechamento direto e nao o USDCLP do `dados`: aquele para na ultima data do
+    # BCCh, um a dois pregoes atras do cambio.
+    usd = fetch_usdclp_closing(HACIENDA_LB_INICIO).dropna().set_index("Data")["USDCLP"]
+    usd = usd[~usd.index.duplicated(keep="last")].sort_index()
+
+    idx = usd.index.union(lb.index)
+    idx = idx[(idx >= HACIENDA_LB_INICIO) & (idx.dayofweek < 5)]
+    d = pd.DataFrame(index=idx)
+    d["oficial"] = -lb["venda"].reindex(idx) + 0.0
+    d["preco"] = lb["preco"].reindex(idx)
+    d["usdclp"] = usd.reindex(idx)
+    ini, fim = lb.index.min(), lb.index.max()
+    d["acum"] = d["oficial"].fillna(0).cumsum().where((idx >= ini) & (idx <= fim))
+    base = usd[usd.index < ini]
+    usd_base = base.iloc[-1] if len(base) else np.nan
+    usd_ult = usd.iloc[-1] if len(usd) else np.nan
+
+    # Semana de calendario (seg-sex), como o resto da aba.
+    v = lb.assign(fin=lb["venda"] * lb["preco"].fillna(0))
+    ws = v.groupby(v.index.to_period("W-FRI")).agg(
+        venda=("venda", "sum"), fin=("fin", "sum"),
+        dias=("venda", lambda x: int((x > 0).sum())), pregoes=("venda", "size"),
+        ate=("venda", lambda x: x.index.max()))
+    ws["fim_semana"] = [p.end_time.normalize() for p in ws.index]
+    ws["oficial"] = -ws["venda"] + 0.0
+    ws["preco"] = ws["fin"] / ws["venda"].where(ws["venda"] > 0)
+    usd_sem = usd.groupby(usd.index.to_period("W-FRI")).last()
+    ws["usdclp"] = usd_sem.reindex(ws.index).values
+    ws["d_usdclp"] = (usd_sem - usd_sem.shift(1)).reindex(ws.index).values
+    if h:
+        est = h["semanal"].set_index("fim_semana")
+        ws["est"] = est["est"].reindex(ws["fim_semana"]).values
+
+    total = -lb["venda"].sum()
+    n_venda = int((lb["venda"] > 0).sum())
+    preco_medio = (v["fin"].sum() / lb["venda"].sum()) if lb["venda"].sum() > 0 else np.nan
+    ult = ws.iloc[-1]
+    ctx = {"hac_of_resumo": '<div class="kpis">' + "".join([
+        _kpi(f"Semana de {ult['fim_semana'] - pd.Timedelta(days=4):%d/%m} (DIPRES)",
+             _br(ult["oficial"]),
+             f"mm USD · {ult['dias']} de {ult['pregoes']} pregões com venda"
+             + (f" · preço médio {ult['preco']:,.2f}" if pd.notna(ult["preco"]) else "")),
+        _kpi(f"Acumulado desde {ini:%d/%m}", _br(total),
+             f"mm USD · até {fim:%d/%m} · {n_venda} pregões com venda"),
+        _kpi("Preço médio ponderado", _num(preco_medio),
+             "CLP por USD · média das vendas pelo volume"),
+        _kpi(f"USDCLP desde {base.index[-1]:%d/%m}" if len(base) else "USDCLP",
+             _num(usd_ult - usd_base, "+,.1f"),
+             f"de {usd_base:,.2f} para {usd_ult:,.2f} ({(usd_ult / usd_base - 1) * 100:+.1f}%)"
+             if pd.notna(usd_base) else ""),
+    ]) + "</div>"}
+
+    ctx["hac_of_diario"] = jgp_card(
+        make_hacienda_oficial_diario(d),
+        "Venda oficial da Hacienda, pregão a pregão, e o USDCLP",
+        f"barras = venda de USD do Tesoro, mm USD (− venda, eixo esq.) · linha = USDCLP de "
+        f"fechamento · losango = preço médio da venda no dia (eixo dir.) · último dado "
+        f"DIPRES {fim:%d/%m/%Y}",
+        _FONTE_LB,
+    )
+    ctx["hac_of_acum"] = jgp_card(
+        make_hacienda_oficial_acum(d),
+        "Venda oficial acumulada e o USDCLP",
+        f"mm USD acumulados desde {ini:%d/%m/%Y} (eixo esq., − venda) · USDCLP de "
+        f"fechamento (eixo dir.)",
+        _FONTE_LB,
+    )
+
+    td = d.loc[d.index <= fim].dropna(subset=["oficial"]).tail(10).iloc[::-1].copy()
+    if h:
+        td["est"] = h["diario"]["est"].reindex(td.index)
+    td["preco_txt"] = [_num(x) for x in td["preco"]]
+    td["usd_txt"] = [_num(x) for x in td["usdclp"]]
+    td.index = [f"{t:%d/%m} {_DIA_SEMANA[t.dayofweek]}" for t in td.index]
+    cols = [("oficial", "Oficial"), ("preco_txt", "Preço médio"), ("usd_txt", "USDCLP")]
+    if h:
+        cols.append(("est", "Hacienda (est.)"))
+    ctx["hac_of_tabela_diaria"] = make_hacienda_table(
+        td, "Últimos 10 pregões (DIPRES)",
+        "mm USD, − venda de USD · preço médio da venda e USDCLP de fechamento em CLP"
+        + (" · Hacienda (est.) = estimativa do Itaú pelo spot de otros" if h else ""),
+        cols, "Pregão",
+    )
+
+    ts = ws.iloc[::-1].copy()
+    ts.index = [f"{f - pd.Timedelta(days=4):%d/%m} a {f:%d/%m}"
+                + (" (parcial)" if a < f else "")
+                for f, a in zip(ts["fim_semana"], ts["ate"])]
+    ts["dias_txt"] = [f"{a} de {p}" for a, p in zip(ts["dias"], ts["pregoes"])]
+    ts["preco_txt"] = [_num(x) for x in ts["preco"]]
+    ts["usd_txt"] = [_num(x) for x in ts["usdclp"]]
+    ts["dusd_txt"] = [_num(x, "+,.2f") for x in ts["d_usdclp"]]
+    if len(ws) > 1:
+        ts.loc["TOTAL"] = pd.Series({
+            "oficial": total, "dias_txt": f"{n_venda} de {len(lb)}",
+            "preco_txt": _num(preco_medio), "usd_txt": _num(usd_ult),
+            "dusd_txt": _num(usd_ult - usd_base, "+,.2f"),
+            "est": ws["est"].sum() if h else np.nan,
+        })
+    cols = [("oficial", "Oficial"), ("dias_txt", "Dias c/ venda"), ("preco_txt", "Preço médio"),
+            ("usd_txt", "USDCLP sex."), ("dusd_txt", "Δ USDCLP")]
+    if h:
+        cols.append(("est", "Hacienda (est.)"))
+    ctx["hac_of_tabela_semanal"] = make_hacienda_table(
+        ts, "Semanas (DIPRES)",
+        "mm USD, − venda de USD · preço médio ponderado pelo volume · Δ USDCLP = "
+        "fechamento de sexta contra a sexta anterior (no total, desde a véspera da 1ª semana)"
+        + (" · Hacienda (est.) = estimativa do Itaú, para comparar" if h else ""),
+        cols, "Semana",
+    )
+    return ctx
+
+
 def build_hacienda_section():
     """Aba Vendas Hacienda: rastreio das vendas de USD do Fisco pelo spot de otros.
 
@@ -627,8 +767,9 @@ def build_hacienda_section():
         "hac_tabela_semanal", "hac_mensal", "hac_tabela_mensal",
     ]
     h = build_hacienda()
+    oficial = build_hacienda_oficial(h)
     if not h:
-        return {k: "<p>Spot de otros sectores indisponível</p>" for k in chaves}
+        return {**{k: "<p>Spot de otros sectores indisponível</p>" for k in chaves}, **oficial}
 
     d, m, sem, regua, calib, ultimo = (
         h["diario"], h["mensal"], h["semanal"], h["regua"], h["calib"], h["ultimo"])
@@ -637,7 +778,7 @@ def build_hacienda_section():
     dd = d.tail(HACIENDA_HIST_DIARIO)
     seg = ultimo.normalize() - pd.Timedelta(days=ultimo.dayofweek)
     meses_zero = ", ".join(_mes_rotulo(t) for t in regua["meses"])
-    ctx = {"hac_resumo": _hacienda_resumo(h)}
+    ctx = {"hac_resumo": _hacienda_resumo(h), **oficial}
 
     ctx["hac_pregoes"] = jgp_card(
         make_hacienda_pregoes(dd, regua),

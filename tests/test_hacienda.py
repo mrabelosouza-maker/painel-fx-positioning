@@ -99,3 +99,24 @@ def test_planilha_em_mil_usd_a_partir_de_2026(monkeypatch, tmp_path):
     assert pd.Timestamp("2026-06-01") not in s.index
     # e o cache foi regravado, para o build sem drive R:.
     assert (tmp_path / "c.csv").exists()
+
+
+def test_liquidaciones_dipres_le_dias_e_pula_total():
+    """Planilha da DIPRES: miles de USD -> mm USD, linha Total fora, dia sem venda
+    com preco NaN."""
+    import io
+    from datetime import datetime
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append([None, None, "Fecha", "Tesoro Público", None])
+    ws.append([None, None, None, "miles de USD", "precio promedio"])
+    ws.append([None, None, datetime(2026, 10, 5), 0, 0])
+    ws.append([None, None, datetime(2026, 10, 6), 200000, 964.4625])
+    ws.append([None, None, "Total", 200000, 964.4625])
+    buf = io.BytesIO()
+    wb.save(buf)
+    df = dp.parse_liquidaciones(buf.getvalue())
+    assert list(df.index) == [pd.Timestamp("2026-10-05"), pd.Timestamp("2026-10-06")]
+    assert df["venda"].tolist() == [0.0, 200.0]
+    assert np.isnan(df["preco"].iloc[0]) and df["preco"].iloc[1] == pytest.approx(964.4625)

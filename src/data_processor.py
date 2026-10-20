@@ -1,6 +1,8 @@
 """Transformacoes de dados: deltas, DV01, joins."""
+import io
 import logging
 import os
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -10,6 +12,7 @@ from config import (
     HACIENDA_CACHE,
     HACIENDA_CALIB_INICIO,
     HACIENDA_FIRSTDATE,
+    HACIENDA_LB_CACHE,
     HACIENDA_RAZAO,
     HACIENDA_REGUA_INICIO,
     HACIENDA_ULTIMO_DIVULGADO,
@@ -48,6 +51,7 @@ from data_fetcher import (
     fetch_bcentral_series,
     fetch_colombia_cop,
     fetch_colombia_forwards,
+    fetch_dipres_liquidaciones,
     fetch_usdclp_closing,
     fetch_usdcop_closing,
 )
@@ -1040,6 +1044,59 @@ def load_hacienda_mensal() -> pd.Series:
     except Exception as e:
         _log.error("Cache da Hacienda tambem falhou: %s", e)
         return pd.Series(dtype=float, name="efetivo")
+
+
+def parse_liquidaciones(conteudo: bytes) -> pd.DataFrame:
+    """Planilha da DIPRES -> DataFrame diario (indice = data; venda em mm USD, preco).
+
+    Uma aba por mes, um bloco por semana: Fecha | miles de USD | precio promedio,
+    com uma linha "Total" no fim de cada bloco. As datas depois da primeira sao
+    formula (=C9+1), entao le o valor em cache (data_only). Dia sem venda vem 0/0:
+    a venda fica 0 e o preco vira NaN.
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo), data_only=True)
+    linhas, sem_data = [], 0
+    for ws in wb:
+        for data, mil, preco in ws.iter_rows(min_col=3, max_col=5, values_only=True):
+            if not isinstance(mil, (int, float)) or isinstance(mil, bool):
+                continue
+            if isinstance(data, datetime):
+                linhas.append((pd.Timestamp(data).normalize(), mil / 1000,
+                               preco if preco else np.nan))
+            elif data is None:
+                sem_data += 1
+    if sem_data:
+        # Planilha salva sem valor em cache das formulas de data: o dia some.
+        _log.warning("Liquidaciones DIPRES: %d linhas sem data legivel", sem_data)
+    df = pd.DataFrame(linhas, columns=["data", "venda", "preco"]).set_index("data")
+    return df[~df.index.duplicated(keep="last")].sort_index()
+
+
+def load_hacienda_liquidaciones() -> pd.DataFrame:
+    """Venda oficial diaria da Hacienda (DIPRES), acumulada no cache versionado.
+
+    A planilha so traz o mes corrente; o que ela tem sobrescreve o cache nas
+    mesmas datas, o resto do cache fica. Sinal CRU (venda > 0): o build inverte.
+    """
+    try:
+        cache = pd.read_csv(HACIENDA_LB_CACHE, parse_dates=["data"]).set_index("data")
+    except Exception:
+        cache = pd.DataFrame(columns=["venda", "preco"], index=pd.DatetimeIndex([], name="data"))
+    conteudo = fetch_dipres_liquidaciones()
+    if conteudo is None:
+        return cache
+    try:
+        novo = parse_liquidaciones(conteudo)
+    except Exception as e:
+        _log.warning("Planilha DIPRES ilegivel (%s), usando cache", e)
+        return cache
+    velho = cache[~cache.index.isin(novo.index)]
+    df = (pd.concat([velho, novo]) if len(velho) else novo).sort_index()
+    df.index.name = "data"
+    os.makedirs(os.path.dirname(HACIENDA_LB_CACHE), exist_ok=True)
+    df.to_csv(HACIENDA_LB_CACHE)
+    return df
 
 
 def build_hacienda() -> dict:

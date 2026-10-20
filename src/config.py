@@ -407,3 +407,17 @@ HACIENDA_TABELA_MESES = 12
 HACIENDA_HIST_SEMANAS = 40
 # Inicio do grafico semanal: o ano corrente, ~40 barras.
 HACIENDA_HIST_SEMANAL_INICIO = "2026-01-01"
+
+# Venda OFICIAL, diaria: "Resultado de Liquidaciones Bilaterales" da DIPRES
+# (https://www.dipres.gob.cl/598/w3-propertyvalue-25351.html), que a Hacienda
+# passou a publicar em out/2026 no lugar do leilao. A planilha traz so o mes
+# corrente (uma aba por mes, miles de USD e preco medio por dia), entao o build
+# ACUMULA no cache versionado: sem ele, o historico sumiria na virada do mes.
+HACIENDA_LB_URL = "https://www.dipres.gob.cl/598/articles-433523_doc_xls_RSS.xlsx"
+HACIENDA_LB_CACHE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "data", "hacienda_liquidaciones.csv",
+)
+# Inicio dos graficos da venda oficial: algumas semanas antes do programa, para o
+# USDCLP ter contexto.
+HACIENDA_LB_INICIO = "2026-09-01"
