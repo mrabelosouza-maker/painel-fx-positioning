@@ -1273,39 +1273,68 @@ def _hac_eixo_usdclp(fig: go.Figure, s: pd.Series, em_cima: bool) -> None:
     ))
 
 
-def make_hacienda_oficial_diario(d: pd.DataFrame, height: int = 420) -> str:
-    """Venda oficial por pregao (barras) + USDCLP de fechamento e preco medio da
-    venda (losango), os dois no eixo direito. `d`: indice = pregao, colunas
-    oficial (<= 0, NaN antes do programa), preco e usdclp."""
+def make_hacienda_oficial_diario(d: pd.DataFrame, n_antes: int = 5, height: int = 520) -> str:
+    """Dois paineis no mesmo eixo de pregoes: em cima o USDCLP de fechamento com o
+    preco medio da venda do dia (losango); embaixo a venda oficial (barras).
+
+    Paineis separados e nao eixo duplo: com duas escalas no mesmo quadro as
+    barras e a linha brigavam e o eixo esquerdo mostrava venda positiva, que nao
+    existe. Abre `n_antes` pregoes antes da primeira venda, para o cambio ter
+    referencia sem esmagar as barras. Eixo categorico: feriado e fim de semana
+    nao abrem buraco.
+    """
     if d.empty or d["oficial"].isna().all():
         return "<p>Dados indisponíveis</p>"
-    x = d.index.strftime("%Y-%m-%d")
-    fig = go.Figure()
+    ini = d["oficial"].first_valid_index()
+    pos = d.index.get_loc(ini)
+    d = d.iloc[max(pos - n_antes, 0):]
+    d = d[d["usdclp"].notna() | d["oficial"].notna()]
+    x = [t.strftime("%d/%m") for t in d.index]
+    dia = [_DIA_SEM[t.dayofweek] for t in d.index]
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
+                        row_heights=[0.5, 0.5])
+    fig.add_trace(go.Scatter(
+        x=x, y=d["usdclp"], name="USDCLP fechamento", mode="lines+markers",
+        line=dict(color=HAC_USDCLP, width=2), marker=dict(size=4), connectgaps=True,
+        customdata=dia, hovertemplate="USDCLP: %{y:,.2f}<extra></extra>",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=x, y=d["preco"], name="preço médio da venda da Hacienda", mode="markers",
+        marker=dict(color=HAC_REALIZADO, size=10, symbol="diamond",
+                    line=dict(color=HAC_INK, width=1)),
+        hovertemplate="preço médio da venda: %{y:,.2f}<extra></extra>",
+    ), row=1, col=1)
     fig.add_trace(go.Bar(
-        x=x, y=d["oficial"], name="venda oficial (eixo esq.)",
+        x=x, y=d["oficial"], name="venda oficial (mm USD)", showlegend=True,
         marker=dict(color=HAC_REALIZADO, cornerradius=3),
         hovertemplate="venda: %{y:+,.0f} mm USD<extra></extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        x=x, y=d["usdclp"], name="USDCLP fechamento (eixo dir.)", yaxis="y2",
-        mode="lines", line=dict(color=HAC_USDCLP, width=2), connectgaps=True,
-        hovertemplate="USDCLP: %{y:,.2f}<extra></extra>",
-    ))
-    fig.add_trace(go.Scatter(
-        x=x, y=d["preco"], name="preço médio da venda (eixo dir.)", yaxis="y2",
-        mode="markers", marker=dict(color=HAC_REALIZADO, size=8, symbol="diamond",
-                                    line=dict(color=HAC_INK, width=1)),
-        hovertemplate="preço médio: %{y:,.2f}<extra></extra>",
-    ))
+    ), row=2, col=1)
     for xi, v in zip(x, d["oficial"]):
         if pd.notna(v) and v < 0:
-            fig.add_annotation(x=xi, y=v, text=_br(v), showarrow=False, yanchor="top",
-                               yshift=-2, font=dict(size=10, color=HAC_INK))
-    _hac_layout(fig, height, pregoes=True, bargap=0.25)
-    fig.update_layout(hovermode="x unified")
+            fig.add_annotation(x=xi, y=v, text=f"<b>{_br(v)}</b>", showarrow=False,
+                               yanchor="top", yshift=-2, xref="x2", yref="y2",
+                               font=dict(size=11, color=HAC_INK))
+
+    # Divisoria por semana e o tick na segunda (ou primeiro pregao da semana).
+    semana = d.index.to_period("W-FRI")
+    inicio = [k for k in range(len(x)) if k == 0 or semana[k] != semana[k - 1]]
+    for k in inicio[1:]:
+        fig.add_vline(x=k - 0.5, line_color="#DADADA", line_width=1, layer="below")
+    _hac_layout(fig, height, eixo_data=False, bargap=0.3)
+    ax = dict(linecolor="#000000", linewidth=1, tickcolor="#000000", ticks="outside",
+              ticklen=3, tickfont=dict(size=11, color=HAC_INK), showgrid=False,
+              title=None)
+    fig.update_xaxes(**ax, type="category", tickvals=x, ticktext=x, tickangle=0)
+    fig.update_xaxes(showticklabels=False, row=1, col=1)
+    fig.update_yaxes(**ax)
+    fig.update_yaxes(showgrid=True, gridcolor="#EBEBEB", tickformat=",.0f",
+                     title_text="USDCLP", title_font=dict(size=11), row=1, col=1)
     mn = float(d["oficial"].min())
-    fig.update_layout(yaxis_range=[1.25 * mn, 0.9 * abs(mn)])
-    _hac_eixo_usdclp(fig, pd.concat([d["usdclp"], d["preco"]]).dropna(), em_cima=True)
+    fig.update_yaxes(showgrid=True, gridcolor="#EBEBEB", zeroline=True,
+                     zerolinecolor=HAC_ZERO, range=[mn * 1.25, -mn * 0.08],
+                     title_text="venda, mm USD", title_font=dict(size=11), row=2, col=1)
+    fig.update_layout(margin=dict(l=64, r=24, t=40, b=28))
     return _hac_html(fig)
 
 

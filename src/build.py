@@ -692,9 +692,9 @@ def build_hacienda_oficial(h: dict) -> dict:
     ctx["hac_of_diario"] = jgp_card(
         make_hacienda_oficial_diario(d),
         "Venda oficial da Hacienda, pregão a pregão, e o USDCLP",
-        f"barras = venda de USD do Tesoro, mm USD (− venda, eixo esq.) · linha = USDCLP de "
-        f"fechamento · losango = preço médio da venda no dia (eixo dir.) · último dado "
-        f"DIPRES {fim:%d/%m/%Y}",
+        f"em cima: USDCLP de fechamento e preço médio da venda do dia (losango) · "
+        f"embaixo: venda de USD do Tesoro, mm USD (− venda) · dias sem barra = sem venda "
+        f"· último dado DIPRES {fim:%d/%m/%Y}",
         _FONTE_LB,
     )
     ctx["hac_of_acum"] = jgp_card(
