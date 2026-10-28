@@ -202,21 +202,44 @@ def fetch_yfinance_closing(ticker_str: str, col_name: str, start: str = "2022-06
         return pd.DataFrame(columns=["Data", col_name])
 
 
+def _fetch_usdclp_bcch() -> pd.DataFrame:
+    """Dolar observado do BCCh, colunas [Data, USDCLP]."""
+    from config import CODIGO_CAMBIO
+    raw = fetch_bcentral_series(CODIGO_CAMBIO)
+    raw["Data"] = pd.to_datetime(raw["date_str"], dayfirst=True, errors="coerce")
+    raw = raw.rename(columns={"value": "USDCLP"})
+    return raw[["Data", "USDCLP"]].dropna()
+
+
 def fetch_usdclp_closing(start: str = "2022-06-01") -> pd.DataFrame:
-    """Busca USDCLP fechamento via Oracle DB. Fallback: Yahoo Finance, depois BCCh."""
+    """Busca USDCLP fechamento via Oracle DB. Fallback: Yahoo Finance, depois BCCh.
+
+    Se o Oracle vier defasado (o CLP Curncy ja travou dias no ODS.MACRO_BBG enquanto
+    as outras moedas seguiam), completa as datas posteriores com o dolar observado do
+    BCCh. Sem isso o DV01 do swap (posicao / cambio) sai NaN nesses dias.
+    """
     df = fetch_bbg_closing(BBG_TICKER_USDCLP, "USDCLP", start)
     if not df.empty:
+        try:
+            bcch = _fetch_usdclp_bcch()
+        except Exception as e:
+            logger.warning("BCCh USDCLP falhou, sem completar o Oracle: %s", e)
+            return df
+        ultima = df["Data"].max()
+        extra = bcch[bcch["Data"] > ultima]
+        if not extra.empty:
+            logger.warning(
+                "Oracle USDCLP parou em %s; completando %d dia(s) com dolar observado BCCh",
+                ultima.date(), len(extra),
+            )
+            df = pd.concat([df, extra], ignore_index=True)
         return df
     logger.warning("Fallback para Yahoo Finance para USDCLP...")
     df = fetch_yfinance_closing("USDCLP=X", "USDCLP", start)
     if not df.empty:
         return df
     logger.warning("Fallback para BCCh (media) para USDCLP...")
-    from config import CODIGO_CAMBIO
-    raw = fetch_bcentral_series(CODIGO_CAMBIO)
-    raw["Data"] = pd.to_datetime(raw["date_str"], dayfirst=True, errors="coerce")
-    raw = raw.rename(columns={"value": "USDCLP"})
-    return raw[["Data", "USDCLP"]].dropna()
+    return _fetch_usdclp_bcch()
 
 
 def fetch_usdcop_closing(start: str = "2016-01-01") -> pd.DataFrame:
